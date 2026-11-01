@@ -43,7 +43,7 @@ func TestIdentityBeatsGeneric(t *testing.T) {
 
 func TestAutogenEmailAndAllow(t *testing.T) {
 	m := matcher(t, identity.Identity{Emails: []string{"taro@example.com"}})
-	got := ids(m.Find("Taro <tyamada@Taros-MacBook-Pro.local> 1+taro@users.noreply.github.com taro@example.com"))
+	got := ids(m.Find("Taro <tyamada@Taros-MacBook-Pro.local> user@Host.local 1+taro@users.noreply.github.com taro@example.com"))
 	want := []string{"generic.autogen-email=tyamada@Taros-MacBook-Pro.local", "identity.email=taro@example.com"}
 	if strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Errorf("got %v want %v", got, want)

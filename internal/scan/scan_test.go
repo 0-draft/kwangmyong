@@ -72,13 +72,17 @@ func TestRunGitRepo(t *testing.T) {
 	gitRun(t, dir, "commit", "-q", "-am", "scrub")
 	gitRun(t, dir, "tag", "-a", "v0.1.0", "-m", "release by tyamada")
 
+	write(t, filepath.Join(dir, "untracked.md"), "draft by Taro Yamada\n")
+	write(t, filepath.Join(dir, ".gitignore"), "ignored.md\n")
+	write(t, filepath.Join(dir, "ignored.md"), "Taro Yamada\n")
+
 	got, err := Run(newMatcher(t), Options{Root: dir, Tree: true, Meta: true, History: true, AllowPaths: []string{"testdata/**"}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	s := bySurface(got)
-	if len(s[SurfaceFile]) != 0 {
-		t.Errorf("tree should be clean after scrub, got %+v", s[SurfaceFile])
+	if len(s[SurfaceFile]) != 1 || s[SurfaceFile][0].Location != "untracked.md" {
+		t.Errorf("tree: want only the untracked, non-ignored file, got %+v", s[SurfaceFile])
 	}
 	if len(s[SurfaceHistory]) != 1 || !strings.HasPrefix(s[SurfaceHistory][0].RuleID, "identity.") {
 		t.Errorf("history: %+v", s[SurfaceHistory])

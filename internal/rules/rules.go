@@ -34,7 +34,10 @@ type Rule struct {
 	ID       string
 	Severity Severity
 	re       *regexp.Regexp
-	skip     func(value string) bool
+	// skip is checked against the first non-empty capture group.
+	skip func(value string) bool
+	// whole reports the full match instead of the capture group.
+	whole bool
 }
 
 // Match is one hit inside a string.
@@ -100,7 +103,9 @@ func generic() []Rule {
 			// A git-generated address (user@Host.local) carries login and hostname.
 			ID:       "generic.autogen-email",
 			Severity: High,
-			re:       regexp.MustCompile(`(?i)\b[a-z0-9._%+-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:local|lan|localdomain)\b`),
+			re:       regexp.MustCompile(`(?i)\b([a-z0-9._%+-]+)@[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:local|lan|localdomain)\b`),
+			skip:     identity.IsPlaceholderLogin,
+			whole:    true,
 		},
 		{
 			// Any user's home directory: the leak shape AI agents produce most.
@@ -119,13 +124,17 @@ func (m *Matcher) Find(s string) []Match {
 	for _, r := range m.rules {
 		for _, loc := range r.re.FindAllStringSubmatchIndex(s, -1) {
 			value := s[loc[0]:loc[1]]
+			group := value
 			for g := 1; g*2 < len(loc); g++ {
 				if loc[g*2] >= 0 {
-					value = s[loc[g*2]:loc[g*2+1]]
+					group = s[loc[g*2]:loc[g*2+1]]
 					break
 				}
 			}
-			if (r.skip != nil && r.skip(value)) || m.allowed(value) {
+			if !r.whole {
+				value = group
+			}
+			if (r.skip != nil && r.skip(group)) || m.allowed(value) {
 				continue
 			}
 			mt := Match{RuleID: r.ID, Severity: r.Severity, Value: value, Start: loc[0], End: loc[1]}

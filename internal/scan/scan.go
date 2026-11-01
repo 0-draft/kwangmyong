@@ -234,14 +234,18 @@ func (s *scanner) walkTree(root string) error {
 }
 
 func (s *scanner) gitTree(top string) error {
-	out, err := git(top, "ls-files", "-z", "--cached")
+	seen := map[string]bool{}
+	// Tracked files plus untracked, non-ignored ones: those are what the next
+	// `git add -A` would commit.
+	out, err := git(top, "ls-files", "-z", "--cached", "--others", "--exclude-standard")
 	if err != nil {
 		return err
 	}
 	for _, rel := range strings.Split(string(out), "\x00") {
-		if rel == "" {
+		if rel == "" || seen[rel] {
 			continue
 		}
+		seen[rel] = true
 		if err := s.file(rel, filepath.Join(top, filepath.FromSlash(rel))); err != nil {
 			return err
 		}
