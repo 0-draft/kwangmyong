@@ -1,0 +1,23 @@
+version: "2"
+linters:
+  default: standard
+  enable:
+    - gosec
+    - misspell
+    - revive
+    - gocritic
+    - errorlint
+    - unconvert
+    - bodyclose
+  settings:
+    gosec:
+      excludes:
+        - G204 # exec of git with argument lists is the scanner's job
+        - G304 # reading files inside the scanned repo is the scanner's job
+  exclusions:
+    presets:
+      - std-error-handling
+formatters:
+  enable:
+    - gofmt
+    - goimports
