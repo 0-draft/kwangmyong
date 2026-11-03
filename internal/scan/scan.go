@@ -40,6 +40,7 @@ const (
 	SurfaceCommit  = "commit"
 	SurfaceTag     = "tag"
 	SurfaceHistory = "history"
+	SurfaceStaged  = "staged"
 )
 
 // Options selects what to scan.
@@ -50,7 +51,21 @@ type Options struct {
 	History     bool
 	MaxFileSize int64
 	AllowPaths  []string
+	// Staged scans only what the next commit would add: the added lines of
+	// the staged diff and the pending author/committer identity.
+	Staged bool
+	// Pending, with Staged, also covers unstaged changes and untracked files:
+	// what `git add -A && git commit` would pick up.
+	Pending bool
+	// Revs limits metadata and history to these rev-list arguments (for
+	// example "A..B", or "B --not --remotes"). Empty means every ref.
+	Revs []string
+	// Top, when set, is the resolved git top-level directory of Root.
+	Top string
 }
+
+// TopLevel resolves the git repository containing root, if any.
+func TopLevel(root string) (top string, isGit, bare bool) { return gitTop(root) }
 
 // Run scans Root. Outside a git repository only the file tree is scanned.
 func Run(m *rules.Matcher, opt Options) ([]Finding, error) {
@@ -60,7 +75,16 @@ func Run(m *rules.Matcher, opt Options) ([]Finding, error) {
 	s := &scanner{m: m, opt: opt, agg: map[string]*Finding{}}
 	top, isGit, bare := gitTop(opt.Root)
 	s.bare = bare
-	if opt.Tree && !bare {
+	if opt.Staged {
+		if !isGit || bare {
+			return nil, fmt.Errorf("--staged needs a git work tree")
+		}
+		if err := s.staged(top); err != nil {
+			return nil, err
+		}
+		return s.result(), nil
+	}
+	if opt.Tree && !bare && len(opt.Revs) == 0 {
 		var err error
 		if isGit {
 			err = s.gitTree(top)
@@ -75,8 +99,10 @@ func Run(m *rules.Matcher, opt Options) ([]Finding, error) {
 		if err := s.commits(top); err != nil {
 			return nil, err
 		}
-		if err := s.tags(top); err != nil {
-			return nil, err
+		if len(opt.Revs) == 0 {
+			if err := s.tags(top); err != nil {
+				return nil, err
+			}
 		}
 	}
 	if isGit && opt.History {
@@ -96,9 +122,12 @@ type scanner struct {
 	order []string
 }
 
-func (s *scanner) pathAllowed(p string) bool {
+func (s *scanner) pathAllowed(p string) bool { return PathAllowed(s.opt.AllowPaths, p) }
+
+// PathAllowed reports whether p (repo-relative) matches any allow glob.
+func PathAllowed(globs []string, p string) bool {
 	p = filepath.ToSlash(p)
-	for _, g := range s.opt.AllowPaths {
+	for _, g := range globs {
 		if matchGlob(g, p) {
 			return true
 		}
@@ -257,7 +286,8 @@ func (s *scanner) commits(top string) error {
 	if _, err := git(top, "rev-parse", "-q", "--verify", "HEAD"); err != nil {
 		return nil // no commits yet
 	}
-	cmd := exec.Command("git", "-C", top, "log", "--all", "--format=%H%x00%an%x00%ae%x00%cn%x00%ce%x00%B%x1e")
+	args := append([]string{"-C", top, "log", "--format=%H%x00%an%x00%ae%x00%cn%x00%ce%x00%B%x1e"}, s.revs()...)
+	cmd := exec.Command("git", args...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return err
@@ -320,14 +350,14 @@ func (s *scanner) history(top string) error {
 		return nil
 	}
 	head := map[string]bool{}
-	if out, err := git(top, "ls-tree", "-r", "-z", "HEAD"); err == nil && !s.bare {
+	if out, err := git(top, "ls-tree", "-r", "-z", "HEAD"); err == nil && !s.bare && len(s.opt.Revs) == 0 {
 		for _, ent := range strings.Split(string(out), "\x00") {
 			if f := strings.Fields(ent); len(f) >= 3 {
 				head[f[2]] = true
 			}
 		}
 	}
-	out, err := git(top, "rev-list", "--all", "--objects", "--filter=object:type=blob")
+	out, err := git(top, append([]string{"rev-list", "--objects", "--filter=object:type=blob"}, s.revs()...)...)
 	if err != nil {
 		return err
 	}
@@ -396,6 +426,86 @@ func (s *scanner) history(top string) error {
 
 // gitTop resolves the repository root. Bare repositories (mirror clones of a
 // whole org) have no worktree: only metadata and history are scanned there.
+func (s *scanner) revs() []string {
+	if len(s.opt.Revs) > 0 {
+		return s.opt.Revs
+	}
+	return []string{"--all"}
+}
+
+// staged scans the added lines of the index diff, the paths it adds, and the
+// identity git would record for the next commit.
+func (s *scanner) staged(top string) error {
+	out, err := git(top, "diff", "--cached", "-U0", "--no-color", "--no-ext-diff", "--no-renames")
+	if err != nil {
+		return err
+	}
+	s.diff(string(out))
+	if s.opt.Pending {
+		if out, err = git(top, "diff", "-U0", "--no-color", "--no-ext-diff", "--no-renames"); err != nil {
+			return err
+		}
+		s.diff(string(out))
+		if out, err = git(top, "ls-files", "-z", "--others", "--exclude-standard"); err != nil {
+			return err
+		}
+		for _, rel := range strings.Split(string(out), "\x00") {
+			if rel != "" {
+				if err := s.file(rel, filepath.Join(top, filepath.FromSlash(rel))); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	s.pendingIdent(top)
+	return nil
+}
+
+// diff reports the added lines and added paths of a unified diff.
+func (s *scanner) diff(out string) {
+	file, line := "", 0
+	for _, l := range strings.Split(out, "\n") {
+		switch {
+		case strings.HasPrefix(l, "+++ "):
+			file = strings.TrimPrefix(strings.TrimPrefix(l, "+++ "), "b/")
+			if file != "/dev/null" && !s.pathAllowed(file) {
+				for _, mt := range s.m.Find(file) {
+					s.add(Finding{RuleID: mt.RuleID, Severity: mt.Severity.String(), Surface: SurfacePath, Location: file, Value: mt.Value})
+				}
+			}
+		case strings.HasPrefix(l, "@@ "):
+			// @@ -a,b +c,d @@
+			if i := strings.Index(l, " +"); i >= 0 {
+				f := strings.FieldsFunc(l[i+2:], func(r rune) bool { return r == ',' || r == ' ' })
+				if len(f) > 0 {
+					line, _ = strconv.Atoi(f[0])
+				}
+			}
+		case strings.HasPrefix(l, "+"):
+			if file != "" && file != "/dev/null" && !s.pathAllowed(file) {
+				for _, mt := range s.m.Find(l[1:]) {
+					s.add(Finding{RuleID: mt.RuleID, Severity: mt.Severity.String(), Surface: SurfaceStaged, Location: file, Line: line, Value: mt.Value})
+				}
+			}
+			line++
+		}
+	}
+}
+
+func (s *scanner) pendingIdent(top string) {
+	for _, v := range []struct{ name, field string }{{"GIT_AUTHOR_IDENT", "author"}, {"GIT_COMMITTER_IDENT", "committer"}} {
+		out, err := git(top, "var", v.name)
+		if err != nil {
+			continue // no identity configured: git itself will refuse the commit
+		}
+		ident := strings.TrimSpace(string(out))
+		if i := strings.LastIndex(ident, ">"); i >= 0 {
+			ident = ident[:i+1]
+		}
+		s.meta(SurfaceCommit, "pending", v.field, ident)
+	}
+}
+
 func gitTop(root string) (top string, isGit, bare bool) {
 	out, err := git(root, "rev-parse", "--is-bare-repository")
 	if err != nil {
