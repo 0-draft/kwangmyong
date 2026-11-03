@@ -6,8 +6,7 @@ import (
 	"unicode"
 )
 
-// Patterns are regexp fragments (already escaped) per identity kind. Each kind
-// is OR-ed into one case-insensitive rule by the rules package.
+// Patterns are escaped regexp fragments per identity kind.
 type Patterns struct {
 	Name    []string
 	Login   []string
@@ -41,10 +40,8 @@ func Expand(id Identity) Patterns {
 
 var tokenSep = regexp.MustCompile(`[\s\x{3000}._\-・]+`)
 
-// NameVariants covers token order swaps, separator and case changes, and
-// initial forms for Latin names ("Taro Yamada" -> "yamada_taro", "TaroYamada",
-// "t.yamada", "tyamada"), and spacing/order changes for CJK names
-// ("山田 太郎" -> "山田太郎", "太郎　山田").
+// NameVariants covers order, separator and initial forms ("yamada_taro",
+// "t.yamada") and CJK spacing ("山田太郎", "太郎　山田").
 func NameVariants(name string) []string {
 	toks := tokenSep.Split(strings.TrimSpace(name), -1)
 	toks = nonEmpty(toks)
@@ -70,12 +67,10 @@ func NameVariants(name string) []string {
 	return uniq(out)
 }
 
-// homePrefixes are the places a login name shows up inside a path or a
-// path-derived slug (Claude Code's ~/.claude/projects/-Users-<login>-<repo>).
+// homePrefixes precede a login in home paths and -Users-<login>- slugs.
 const homePrefixes = `(?:/Users/|/home/|[A-Za-z]:(?:\\\\|\\|/)Users(?:\\\\|\\|/)|-Users-|-home-)`
 
-// LoginVariants matches the login inside home paths everywhere, and as a bare
-// word only when it is long enough not to collide with ordinary text.
+// LoginVariants matches the login in paths, and as a word from 5 characters.
 func LoginVariants(login string) []string {
 	q := regexp.QuoteMeta(login)
 	out := []string{homePrefixes + q + `\b`, `\b` + q + `@`}
@@ -95,8 +90,7 @@ func EmailVariants(email string) []string {
 	return out
 }
 
-// HostVariants matches the hostname with "-" also spelled as a space or
-// apostrophe form ("Taros-MacBook-Pro" vs "Taro's MacBook Pro").
+// HostVariants also matches the spaced form ("Taro's MacBook Pro").
 func HostVariants(host string) []string {
 	parts := strings.Split(host, "-")
 	q := make([]string, len(parts))

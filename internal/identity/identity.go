@@ -1,5 +1,4 @@
-// Package identity holds who the scan is protecting and expands each declared
-// identity into the many spellings it leaks under.
+// Package identity loads, detects and expands the identity being protected.
 package identity
 
 import (
@@ -12,9 +11,7 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
-// Identity is the set of strings that identify the person running the scan.
-// It lives in the user's config directory, never in the scanned repository:
-// a repo-level file listing these would publish exactly what it protects.
+// Identity is who the scan protects. It lives in the user config only.
 type Identity struct {
 	Names    []string `toml:"names"`
 	Logins   []string `toml:"logins"`
@@ -35,7 +32,7 @@ type Config struct {
 	Allow    Allow    `toml:"allow"`
 }
 
-// RepoConfigName is the per-repository config file. It may only carry [allow].
+// RepoConfigName is the per-repository config; it may only carry [allow].
 const RepoConfigName = ".kwangmyong.toml"
 
 // ErrIdentityInRepo is returned when a repo-level config declares [identity].
@@ -97,8 +94,7 @@ func (id Identity) Empty() bool {
 	return len(id.Names)+len(id.Logins)+len(id.Emails)+len(id.Hosts)+len(id.Literals) == 0
 }
 
-// Normalize trims, drops placeholders and noreply addresses, and dedupes
-// case-insensitively.
+// Normalize trims, drops placeholders and noreply addresses, and dedupes.
 func (id Identity) Normalize() Identity {
 	return Identity{
 		Names:    clean(id.Names, func(s string) bool { return len([]rune(s)) >= 2 }),
@@ -154,8 +150,7 @@ var placeholderLogins = map[string]bool{
 	"yourname": true, "your-name": true, "your_name": true, "x": true,
 }
 
-// IsPlaceholderLogin reports whether s is a generic account name that is not
-// anyone's identity (CI runners, docs placeholders).
+// IsPlaceholderLogin reports whether s is a generic account name.
 func IsPlaceholderLogin(s string) bool {
 	return placeholderLogins[strings.ToLower(s)]
 }

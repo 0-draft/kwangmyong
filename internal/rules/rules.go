@@ -1,5 +1,4 @@
-// Package rules turns identity patterns and built-in generic detectors into a
-// matcher over text.
+// Package rules matches identity patterns and generic detectors against text.
 package rules
 
 import (
@@ -13,7 +12,7 @@ import (
 	"github.com/0-draft/kwangmyong/internal/identity"
 )
 
-// Severity orders findings. High findings fail a scan by default.
+// Severity of a finding.
 type Severity int
 
 // Severities.
@@ -34,10 +33,8 @@ type Rule struct {
 	ID       string
 	Severity Severity
 	re       *regexp.Regexp
-	// skip is checked against the first non-empty capture group.
-	skip func(value string) bool
-	// whole reports the full match instead of the capture group.
-	whole bool
+	skip     func(group string) bool // checked against the first capture group
+	whole    bool                    // report the whole match, not the group
 }
 
 // Match is one hit inside a string.
@@ -49,16 +46,16 @@ type Match struct {
 	End      int
 }
 
-// Matcher runs rules in priority order (identity first, generic last).
+// Matcher runs rules in priority order.
 type Matcher struct {
 	rules []Rule
 	allow []*regexp.Regexp
 }
 
-// DefaultAllowValues are values never reported.
+// DefaultAllowValues are never reported.
 var DefaultAllowValues = []string{`(?i)@users\.noreply\.github\.com$`}
 
-// New builds a matcher. allowValues are regexps matched against a hit's value.
+// New builds a matcher; allowValues are regexps over matched values.
 func New(p identity.Patterns, allowValues []string) (*Matcher, error) {
 	m := &Matcher{}
 	add := func(id string, sev Severity, frags []string) error {
@@ -100,7 +97,6 @@ func New(p identity.Patterns, allowValues []string) (*Matcher, error) {
 func generic() []Rule {
 	return []Rule{
 		{
-			// A git-generated address (user@Host.local) carries login and hostname.
 			ID:       "generic.autogen-email",
 			Severity: High,
 			re:       regexp.MustCompile(`(?i)\b([a-z0-9._%+-]+)@[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:local|lan|localdomain)\b`),
@@ -108,7 +104,6 @@ func generic() []Rule {
 			whole:    true,
 		},
 		{
-			// Any user's home directory: the leak shape AI agents produce most.
 			ID:       "generic.home-path",
 			Severity: Warn,
 			re:       regexp.MustCompile(`(?:/Users/|/home/|[A-Za-z]:(?:\\\\|\\|/)Users(?:\\\\|\\|/))([A-Za-z0-9][A-Za-z0-9._-]*)|-Users-([A-Za-z0-9][A-Za-z0-9._]*)-`),
@@ -117,8 +112,7 @@ func generic() []Rule {
 	}
 }
 
-// Find returns non-overlapping matches in s. Where rules overlap, the earlier
-// (more specific) rule wins.
+// Find returns non-overlapping matches; earlier rules win overlaps.
 func (m *Matcher) Find(s string) []Match {
 	var kept []Match
 	for _, r := range m.rules {
@@ -165,8 +159,7 @@ func overlaps(kept []Match, m Match) bool {
 	return false
 }
 
-// Redact renders a value without revealing it: two leading runes and a short
-// fingerprint, so repeated hits of the same value are recognisable.
+// Redact returns the leading runes of v and a fingerprint.
 func Redact(v string) string {
 	sum := sha256.Sum256([]byte(strings.ToLower(v)))
 	r := []rune(v)

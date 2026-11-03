@@ -30,8 +30,7 @@ func Summarize(fs []scan.Finding) Summary {
 	return s
 }
 
-// Text writes a human-readable table. reveal prints raw values; use it only on
-// your own terminal.
+// Text writes a table. reveal prints raw values.
 func Text(w io.Writer, fs []scan.Finding, reveal bool) error {
 	if len(fs) == 0 {
 		_, err := fmt.Fprintln(w, "no identity leaks found")
@@ -67,8 +66,7 @@ func location(f scan.Finding) string {
 	return loc
 }
 
-// JSON writes {"summary":…, "findings":[…]}. Raw values are only included
-// when reveal is set.
+// JSON writes the summary and findings. reveal adds raw values.
 func JSON(w io.Writer, fs []scan.Finding, reveal bool) error {
 	type out struct {
 		scan.Finding

@@ -1,5 +1,4 @@
-// Package scan walks a repository's surfaces — tracked files, commit and tag
-// metadata, and every historical blob — and reports identity leaks.
+// Package scan finds identity leaks in a repository's files, metadata and history.
 package scan
 
 import (
@@ -20,7 +19,7 @@ import (
 	"github.com/0-draft/kwangmyong/internal/rules"
 )
 
-// Finding is one reported leak. Value is never serialised; Redacted is.
+// Finding is one leak. Value is never serialised.
 type Finding struct {
 	RuleID   string `json:"rule"`
 	Severity string `json:"severity"`
@@ -51,23 +50,15 @@ type Options struct {
 	History     bool
 	MaxFileSize int64
 	AllowPaths  []string
-	// Staged scans only what the next commit would add: the added lines of
-	// the staged diff and the pending author/committer identity.
-	Staged bool
-	// Pending, with Staged, also covers unstaged changes and untracked files:
-	// what `git add -A && git commit` would pick up.
-	Pending bool
-	// Revs limits metadata and history to these rev-list arguments (for
-	// example "A..B", or "B --not --remotes"). Empty means every ref.
-	Revs []string
-	// Top, when set, is the resolved git top-level directory of Root.
-	Top string
+	Staged      bool     // only the staged diff and the pending identity
+	Pending     bool     // with Staged: unstaged and untracked changes too
+	Revs        []string // rev-list arguments for metadata and history; default --all
 }
 
 // TopLevel resolves the git repository containing root, if any.
 func TopLevel(root string) (top string, isGit, bare bool) { return gitTop(root) }
 
-// Run scans Root. Outside a git repository only the file tree is scanned.
+// Run scans Root. Outside git, only files are scanned.
 func Run(m *rules.Matcher, opt Options) ([]Finding, error) {
 	if opt.MaxFileSize <= 0 {
 		opt.MaxFileSize = 5 << 20
@@ -135,8 +126,7 @@ func PathAllowed(globs []string, p string) bool {
 	return false
 }
 
-// matchGlob supports path.Match patterns plus "**/" (any leading directories)
-// and a trailing "/**" (everything below a directory).
+// matchGlob is path.Match plus a leading "**/" and a trailing "/**".
 func matchGlob(g, p string) bool {
 	if strings.HasSuffix(g, "/**") && (p == strings.TrimSuffix(g, "/**") || strings.HasPrefix(p, strings.TrimSuffix(g, "**"))) {
 		return true
@@ -164,8 +154,7 @@ func (s *scanner) add(f Finding) {
 	s.out = append(s.out, f)
 }
 
-// aggregate folds repeated hits (the same email on 20k commits) into one
-// finding with a count.
+// aggregate folds repeated hits into one finding with a count.
 func (s *scanner) aggregate(key string, f Finding) {
 	if a, ok := s.agg[key]; ok {
 		a.Count++
@@ -264,8 +253,6 @@ func (s *scanner) walkTree(root string) error {
 
 func (s *scanner) gitTree(top string) error {
 	seen := map[string]bool{}
-	// Tracked files plus untracked, non-ignored ones: those are what the next
-	// `git add -A` would commit.
 	out, err := git(top, "ls-files", "-z", "--cached", "--others", "--exclude-standard")
 	if err != nil {
 		return err
@@ -343,8 +330,7 @@ func (s *scanner) meta(surface, ref, field, text string) {
 	}
 }
 
-// history scans every blob reachable from any ref that is not also in HEAD
-// (those are covered by the tree scan).
+// history scans reachable blobs that are not in HEAD.
 func (s *scanner) history(top string) error {
 	if _, err := git(top, "rev-parse", "-q", "--verify", "HEAD"); err != nil {
 		return nil
@@ -404,8 +390,7 @@ func (s *scanner) history(top string) error {
 		if err != nil {
 			return fmt.Errorf("cat-file header %q: %w", hdr, err)
 		}
-		// rev-list --objects also lists annotated tag objects under their name;
-		// tag metadata is covered by the tag scan.
+		// rev-list --objects also lists annotated tags.
 		if f[1] != "blob" || size > s.opt.MaxFileSize {
 			if _, err := io.CopyN(io.Discard, r, size+1); err != nil {
 				return err
@@ -424,8 +409,6 @@ func (s *scanner) history(top string) error {
 	return cmd.Wait()
 }
 
-// gitTop resolves the repository root. Bare repositories (mirror clones of a
-// whole org) have no worktree: only metadata and history are scanned there.
 func (s *scanner) revs() []string {
 	if len(s.opt.Revs) > 0 {
 		return s.opt.Revs
@@ -433,8 +416,6 @@ func (s *scanner) revs() []string {
 	return []string{"--all"}
 }
 
-// staged scans the added lines of the index diff, the paths it adds, and the
-// identity git would record for the next commit.
 func (s *scanner) staged(top string) error {
 	out, err := git(top, "diff", "--cached", "-U0", "--no-color", "--no-ext-diff", "--no-renames")
 	if err != nil {
@@ -461,7 +442,6 @@ func (s *scanner) staged(top string) error {
 	return nil
 }
 
-// diff reports the added lines and added paths of a unified diff.
 func (s *scanner) diff(out string) {
 	file, line := "", 0
 	for _, l := range strings.Split(out, "\n") {
@@ -474,7 +454,6 @@ func (s *scanner) diff(out string) {
 				}
 			}
 		case strings.HasPrefix(l, "@@ "):
-			// @@ -a,b +c,d @@
 			if i := strings.Index(l, " +"); i >= 0 {
 				f := strings.FieldsFunc(l[i+2:], func(r rune) bool { return r == ',' || r == ' ' })
 				if len(f) > 0 {

@@ -1,6 +1,5 @@
-// Package github scans the parts of GitHub that never reach a clone: repository
-// metadata, issues and pull requests, their comments and reviews, releases,
-// gists, and whether a former username is free for someone else to take.
+// Package github scans issues, pull requests, comments, reviews, releases,
+// gists and repository metadata, and checks former usernames.
 package github
 
 import (
@@ -23,7 +22,7 @@ import (
 	"github.com/0-draft/kwangmyong/internal/scan"
 )
 
-// Surface is the finding surface for everything this package reports.
+// Surface of every finding from this package.
 const Surface = "github"
 
 // Client is a minimal GitHub REST client.
@@ -417,9 +416,7 @@ func (s *Scanner) gists(ctx context.Context, owner, me string) error {
 	return nil
 }
 
-// handles reports declared logins that are free to register on GitHub. A
-// renamed account's old name keeps redirecting until someone takes it; then
-// every github.com/<old>/... link, go module path and clone URL points at them.
+// handles reports declared logins that are free to register.
 func (s *Scanner) handles(ctx context.Context, handles []string) error {
 	for _, h := range handles {
 		if !validHandle.MatchString(h) {

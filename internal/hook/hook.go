@@ -1,5 +1,4 @@
-// Package hook adapts kwangmyong to git hooks and to Claude Code's PreToolUse
-// hook, so a leak is stopped before it is committed, pushed or posted.
+// Package hook runs kwangmyong from git hooks and Claude Code's PreToolUse.
 package hook
 
 import (
@@ -17,15 +16,14 @@ import (
 	"github.com/0-draft/kwangmyong/internal/scan"
 )
 
-// Result is a hook decision. Block means the tool call / git operation must
-// not proceed; Reason is shown to the user (or fed back to the agent).
+// Result is a hook decision.
 type Result struct {
 	Block    bool
 	Reason   string
 	Findings []scan.Finding
 }
 
-// Env carries what the adapters need besides the payload.
+// Env is the matcher and allowlist a hook runs with.
 type Env struct {
 	Matcher    *rules.Matcher
 	AllowPaths []string
@@ -66,9 +64,8 @@ func decide(what string, fs []scan.Finding) Result {
 	return Result{Block: true, Reason: b.String(), Findings: fs}
 }
 
-// PreCommit checks the staged diff and the pending commit identity. With
-// pending, unstaged changes and untracked files count too (for `git add -A &&
-// git commit` run as one command, where nothing is staged yet).
+// PreCommit checks the staged diff and the pending identity. pending adds
+// unstaged and untracked changes, for `git add -A && git commit`.
 func PreCommit(env Env, dir string, pending bool) (Result, error) {
 	fs, err := scan.Run(env.Matcher, scan.Options{Root: dir, Staged: true, Pending: pending, AllowPaths: env.AllowPaths})
 	if err != nil {
@@ -79,9 +76,8 @@ func PreCommit(env Env, dir string, pending bool) (Result, error) {
 
 const zeroSHA = "0000000000000000000000000000000000000000"
 
-// PrePush checks the metadata and blobs of the commits being pushed. Lines on
-// stdin are git's "<local ref> <local sha> <remote ref> <remote sha>"; the
-// pre-commit framework passes PRE_COMMIT_FROM_REF / PRE_COMMIT_TO_REF instead.
+// PrePush checks the commits being pushed, read from git's pre-push stdin or
+// from pre-commit's PRE_COMMIT_FROM_REF / PRE_COMMIT_TO_REF.
 func PrePush(env Env, dir string, stdin io.Reader) (Result, error) {
 	var ranges [][]string
 	if from, to := os.Getenv("PRE_COMMIT_FROM_REF"), os.Getenv("PRE_COMMIT_TO_REF"); to != "" {
@@ -118,7 +114,6 @@ func PrePush(env Env, dir string, stdin io.Reader) (Result, error) {
 	return decide("this push", all), nil
 }
 
-// claudePayload is the subset of Claude Code's PreToolUse input we read.
 type claudePayload struct {
 	ToolName  string          `json:"tool_name"`
 	ToolInput json.RawMessage `json:"tool_input"`
@@ -144,7 +139,7 @@ var (
 	ghPostRe    = regexp.MustCompile(`(?:^|[;&|(]\s*|\s)gh\s+(?:pr|issue|api|release|gist|repo)(?:\s|$)`)
 )
 
-// Claude handles a Claude Code PreToolUse payload.
+// Claude checks a Claude Code PreToolUse payload.
 func Claude(env Env, payload io.Reader) (Result, error) {
 	var p claudePayload
 	if err := json.NewDecoder(payload).Decode(&p); err != nil {
@@ -218,8 +213,7 @@ func textFindings(env Env, surface, location string, texts ...string) []scan.Fin
 	return out
 }
 
-// pathTokens returns the existing files a command refers to (--body-file x,
-// -F body=@x, plain arguments).
+// pathTokens returns the existing files named in cmd.
 func pathTokens(cmd, cwd string) []string {
 	var out []string
 	for _, tok := range strings.Fields(cmd) {
@@ -232,9 +226,8 @@ func pathTokens(cmd, cwd string) []string {
 	return out
 }
 
-// stripPaths removes tokens naming existing files or directories: such paths
-// legitimately contain $HOME (scratch files, --body-file targets) and are not
-// what gets published; their contents are checked separately.
+// stripPaths drops tokens that name existing paths; those contain $HOME by
+// nature and their contents are checked instead.
 func stripPaths(cmd, cwd string) string {
 	out := cmd
 	for _, tok := range strings.Fields(cmd) {
@@ -305,7 +298,6 @@ func inRepo(path, cwd string) bool {
 	if err := exec.Command("git", "-C", dir, "rev-parse", "--is-inside-work-tree").Run(); err != nil {
 		return false
 	}
-	// check-ignore exits 0 when the path is ignored.
 	return exec.Command("git", "-C", dir, "check-ignore", "-q", path).Run() != nil
 }
 

@@ -9,9 +9,8 @@ import (
 	"strings"
 )
 
-// Detect collects the identity this machine already reveals: the login name,
-// the home directory's base name, the account's full name, the hostname, and
-// the global git identity.
+// Detect reads the login, home directory, full name, hostname and global git
+// identity of this machine.
 func Detect() Identity {
 	var id Identity
 	if u, err := user.Current(); err == nil {
@@ -30,7 +29,6 @@ func Detect() Identity {
 	if h, err := os.Hostname(); err == nil && !genericHost.MatchString(h) {
 		id.Hosts = append(id.Hosts, h)
 	}
-	// A single-token user.name is a public handle, not a real name.
 	if v := gitGlobal("user.name"); strings.ContainsAny(strings.TrimSpace(v), " \u3000") {
 		id.Names = append(id.Names, v)
 	}
@@ -40,8 +38,7 @@ func Detect() Identity {
 	return id.Normalize()
 }
 
-// genericHost matches factory-default Mac hostnames, which name the hardware,
-// not the person, and would flag every mention of "MacBook Pro".
+// genericHost matches factory-default Mac hostnames.
 var genericHost = regexp.MustCompile(`(?i)^(?:macbook(?:-pro|-air)?|imac|mac-?mini|mac-?studio|mac-?pro)(?:-\d+)?(?:\.local)?$`)
 
 func gitGlobal(key string) string {

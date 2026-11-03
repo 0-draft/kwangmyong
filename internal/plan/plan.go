@@ -1,5 +1,4 @@
-// Package plan turns a repository's identity leaks into a history-rewrite
-// plan: git filter-repo inputs plus the checklist around a force-push.
+// Package plan writes git filter-repo inputs and a rewrite checklist.
 package plan
 
 import (
@@ -19,7 +18,7 @@ import (
 
 var loginShaped = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
 
-// Target is the identity history is rewritten to.
+// Target is the identity to rewrite to.
 type Target struct {
 	Name  string
 	Email string
@@ -34,7 +33,7 @@ func ParseTarget(s string) (Target, error) {
 	return Target{Name: strings.TrimSpace(s[:i]), Email: strings.TrimSpace(s[i+1 : j])}, nil
 }
 
-// Plan is the computed remediation.
+// Plan is a computed rewrite.
 type Plan struct {
 	Repo          string
 	Remote        string
@@ -50,7 +49,7 @@ type Plan struct {
 	OpenPRWarning bool
 }
 
-// Build computes a plan for the repository at dir from scan findings.
+// Build computes a plan for dir from scan findings.
 func Build(dir string, m *rules.Matcher, fs []scan.Finding, to Target) (*Plan, error) {
 	top, ok, _ := scan.TopLevel(dir)
 	if !ok {
@@ -80,7 +79,6 @@ func Build(dir string, m *rules.Matcher, fs []scan.Finding, to Target) (*Plan, e
 	p.Values = len(values)
 	p.Replacements = replacements(values, to)
 
-	// Mailmap: every (name, email) pair in commits or tags where either half leaks.
 	idents, err := identPairs(top)
 	if err != nil {
 		return nil, err
@@ -117,9 +115,7 @@ func leaks(m *rules.Matcher, s string) bool {
 	return false
 }
 
-// replacements orders path-shaped rewrites before bare values, and longer
-// values before their substrings, so "/Users/x/..." becomes "~/..." rather
-// than "/Users/user/...".
+// replacements puts path rewrites first and longer values before shorter.
 func replacements(values map[string]string, to Target) []string {
 	type kv struct{ v, rule string }
 	var list []kv
@@ -135,8 +131,6 @@ func replacements(values map[string]string, to Target) []string {
 	var paths, plain []string
 	for _, e := range list {
 		v := e.v
-		// Any single-token value can sit in a home path ("tyamada" matched as a
-		// name initial form is also the login): rewrite the path shape first.
 		if loginShaped.MatchString(v) {
 			paths = append(paths,
 				"literal:/Users/"+v+"==>~",
@@ -148,7 +142,6 @@ func replacements(values map[string]string, to Target) []string {
 		}
 		switch e.rule {
 		case "generic.home-path":
-			// someone's home path: rewrite the path, leave the bare word alone
 		case "identity.login":
 			plain = append(plain, "literal:"+v+"==>user")
 		case "identity.email", "generic.autogen-email":
@@ -196,9 +189,7 @@ func identPairs(top string) ([]ident, error) {
 	return res, sc.Err()
 }
 
-// firstChanged finds the oldest commit a rewrite would touch: one whose
-// identity or message leaks, or that touches a file that leaks. Every commit
-// after it in topological order gets a new SHA.
+// firstChanged finds the oldest commit a rewrite would touch.
 func (p *Plan) firstChanged(top string, m *rules.Matcher, paths map[string]bool) error {
 	if _, err := git(top, "rev-parse", "-q", "--verify", "HEAD"); err != nil {
 		return nil
@@ -246,8 +237,7 @@ func (p *Plan) firstChanged(top string, m *rules.Matcher, paths map[string]bool)
 	return nil
 }
 
-// Write stores the plan in dir with owner-only permissions: the replacement
-// file and mailmap hold the raw values being removed.
+// Write stores the plan in dir, owner-only.
 func (p *Plan) Write(dir string) error {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err

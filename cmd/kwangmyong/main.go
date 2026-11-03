@@ -1,5 +1,4 @@
-// Command kwangmyong finds your own identity — real name, login, personal
-// email, hostname, home paths — leaking from git repositories.
+// Command kwangmyong finds your own identity leaking from git repositories.
 package main
 
 import (
@@ -23,8 +22,6 @@ import (
 	"github.com/0-draft/kwangmyong/internal/scan"
 )
 
-// version is set by goreleaser; `go install ...@vX` builds fall back to the
-// module version recorded in the binary.
 var version = "dev"
 
 func currentVersion() string {
@@ -256,7 +253,6 @@ func cmdIdentity(args []string, stdout, stderr io.Writer) error {
 	return nil
 }
 
-// matcher loads identity and allow settings for root and builds the matcher.
 func (c *common) matcher(root string, stderr io.Writer) (*rules.Matcher, identity.Identity, []string, error) {
 	id, allow, err := c.load()
 	if err != nil {
@@ -412,7 +408,6 @@ func cmdHook(args []string, stdin io.Reader, stderr io.Writer) (int, error) {
 	blockCode := 1
 	switch args[0] {
 	case "claude":
-		// Claude Code: exit 2 blocks the tool call and feeds stderr back to Claude.
 		blockCode = 2
 		r, err = hook.Claude(env, stdin)
 	case "pre-commit":
