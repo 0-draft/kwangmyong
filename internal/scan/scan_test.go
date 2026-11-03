@@ -139,3 +139,30 @@ func TestMatchGlob(t *testing.T) {
 		}
 	}
 }
+
+func TestRunStagedMnemonicPrefix(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not installed")
+	}
+	dir := t.TempDir()
+	gitRun(t, dir, "init", "-q")
+	gitRun(t, dir, "config", "diff.mnemonicPrefix", "true")
+	write(t, filepath.Join(dir, "notes", "a.md"), "ok\nbuilt in /Users/tyamada/src\n")
+	gitRun(t, dir, "add", "-A")
+
+	got, err := Run(newMatcher(t), Options{Root: dir, Staged: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := bySurface(got)
+	if len(s[SurfaceStaged]) != 1 || s[SurfaceStaged][0].Location != "notes/a.md" || s[SurfaceStaged][0].Line != 2 {
+		t.Errorf("staged: %+v", s[SurfaceStaged])
+	}
+	got, err = Run(newMatcher(t), Options{Root: dir, Staged: true, AllowPaths: []string{"notes/**"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := len(bySurface(got)[SurfaceStaged]); n != 0 {
+		t.Errorf("allowed path still reported: %d", n)
+	}
+}

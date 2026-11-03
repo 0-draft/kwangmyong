@@ -417,13 +417,13 @@ func (s *scanner) revs() []string {
 }
 
 func (s *scanner) staged(top string) error {
-	out, err := git(top, "diff", "--cached", "-U0", "--no-color", "--no-ext-diff", "--no-renames")
+	out, err := git(top, "diff", "--cached", "-U0", "--no-color", "--no-ext-diff", "--no-renames", "--no-prefix")
 	if err != nil {
 		return err
 	}
 	s.diff(string(out))
 	if s.opt.Pending {
-		if out, err = git(top, "diff", "-U0", "--no-color", "--no-ext-diff", "--no-renames"); err != nil {
+		if out, err = git(top, "diff", "-U0", "--no-color", "--no-ext-diff", "--no-renames", "--no-prefix"); err != nil {
 			return err
 		}
 		s.diff(string(out))
@@ -447,7 +447,7 @@ func (s *scanner) diff(out string) {
 	for _, l := range strings.Split(out, "\n") {
 		switch {
 		case strings.HasPrefix(l, "+++ "):
-			file = strings.TrimPrefix(strings.TrimPrefix(l, "+++ "), "b/")
+			file = strings.TrimPrefix(l, "+++ ")
 			if file != "/dev/null" && !s.pathAllowed(file) {
 				for _, mt := range s.m.Find(file) {
 					s.add(Finding{RuleID: mt.RuleID, Severity: mt.Severity.String(), Surface: SurfacePath, Location: file, Value: mt.Value})
