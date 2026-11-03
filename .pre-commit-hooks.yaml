@@ -1,0 +1,16 @@
+- id: kwangmyong
+  name: kwangmyong (identity leaks in the staged diff)
+  description: Block commits that would publish your real name, login, personal email, hostname or home paths.
+  entry: kwangmyong hook pre-commit
+  language: golang
+  pass_filenames: false
+  always_run: true
+  stages: [pre-commit]
+- id: kwangmyong-pre-push
+  name: kwangmyong (identity leaks in pushed commits)
+  description: Block pushes whose commits carry your identity in metadata or contents.
+  entry: kwangmyong hook pre-push
+  language: golang
+  pass_filenames: false
+  always_run: true
+  stages: [pre-push]
