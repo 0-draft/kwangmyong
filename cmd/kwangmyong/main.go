@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 
 	"github.com/0-draft/kwangmyong/internal/github"
@@ -22,7 +23,19 @@ import (
 	"github.com/0-draft/kwangmyong/internal/scan"
 )
 
+// version is set by goreleaser; `go install ...@vX` builds fall back to the
+// module version recorded in the binary.
 var version = "dev"
+
+func currentVersion() string {
+	if version != "dev" {
+		return version
+	}
+	if bi, ok := debug.ReadBuildInfo(); ok && bi.Main.Version != "" && bi.Main.Version != "(devel)" {
+		return bi.Main.Version
+	}
+	return version
+}
 
 const usage = `kwangmyong — keep your identity inside.
 
@@ -64,7 +77,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	case "identity":
 		err = cmdIdentity(args[1:], stdout, stderr)
 	case "version", "--version":
-		fmt.Fprintln(stdout, version)
+		fmt.Fprintln(stdout, currentVersion())
 	case "help", "-h", "--help":
 		fmt.Fprint(stdout, usage)
 	default:
