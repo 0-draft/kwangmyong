@@ -143,18 +143,7 @@ func cmdScan(args []string, stdout, stderr io.Writer) (int, error) {
 		return 2, fmt.Errorf("unknown format %q", *format)
 	}
 
-	id, allow, err := c.load()
-	if err != nil {
-		return 2, err
-	}
-	repoAllow, err := identity.LoadRepo(root)
-	if err != nil {
-		return 2, err
-	}
-	if id.Empty() {
-		fmt.Fprintln(stderr, "kwangmyong: no identity declared or detected; only generic rules are active (run `kwangmyong init`)")
-	}
-	m, err := rules.New(identity.Expand(id), append(allow.Values, repoAllow.Values...))
+	m, _, allowPaths, err := c.matcher(root, stderr)
 	if err != nil {
 		return 2, err
 	}
@@ -164,25 +153,13 @@ func cmdScan(args []string, stdout, stderr io.Writer) (int, error) {
 		Meta:        !*noMeta,
 		History:     *history,
 		MaxFileSize: *maxSize,
-		AllowPaths:  append(allow.Paths, repoAllow.Paths...),
+		AllowPaths:  allowPaths,
 		Staged:      *staged,
 	})
 	if err != nil {
 		return 2, err
 	}
-	if *format == "json" {
-		err = report.JSON(stdout, findings, *reveal)
-	} else {
-		err = report.Text(stdout, findings, *reveal)
-	}
-	if err != nil {
-		return 2, err
-	}
-	s := report.Summarize(findings)
-	if s.High > 0 || (*strict && s.Warn > 0) {
-		return 1, nil
-	}
-	return 0, nil
+	return finish(stdout, *format, *reveal, *strict, findings)
 }
 
 func cmdInit(stdout io.Writer) error {
@@ -269,11 +246,21 @@ func (c *common) matcher(root string, stderr io.Writer) (*rules.Matcher, identit
 	return m, id, append(allow.Paths, repoAllow.Paths...), err
 }
 
-func output(stdout io.Writer, format string, reveal bool, findings []scan.Finding) error {
+func finish(stdout io.Writer, format string, reveal, strict bool, findings []scan.Finding) (int, error) {
+	var err error
 	if format == "json" {
-		return report.JSON(stdout, findings, reveal)
+		err = report.JSON(stdout, findings, reveal)
+	} else {
+		err = report.Text(stdout, findings, reveal)
 	}
-	return report.Text(stdout, findings, reveal)
+	if err != nil {
+		return 2, err
+	}
+	sum := report.Summarize(findings)
+	if sum.High > 0 || (strict && sum.Warn > 0) {
+		return 1, nil
+	}
+	return 0, nil
 }
 
 func cmdGitHub(args []string, stdout, stderr io.Writer) (int, error) {
@@ -294,6 +281,9 @@ func cmdGitHub(args []string, stdout, stderr io.Writer) (int, error) {
 	if fs.NArg() != 1 {
 		return 2, errors.New("usage: kwangmyong github [flags] <owner>[/repo]")
 	}
+	if *format != "text" && *format != "json" {
+		return 2, fmt.Errorf("unknown format %q", *format)
+	}
 	owner, repo, _ := strings.Cut(fs.Arg(0), "/")
 	m, id, _, err := c.matcher(".", stderr)
 	if err != nil {
@@ -311,14 +301,7 @@ func cmdGitHub(args []string, stdout, stderr io.Writer) (int, error) {
 	if err != nil {
 		return 2, err
 	}
-	if err := output(stdout, *format, *reveal, findings); err != nil {
-		return 2, err
-	}
-	sum := report.Summarize(findings)
-	if sum.High > 0 || (*strict && sum.Warn > 0) {
-		return 1, nil
-	}
-	return 0, nil
+	return finish(stdout, *format, *reveal, *strict, findings)
 }
 
 func cmdPlan(args []string, stdout, stderr io.Writer) error {
