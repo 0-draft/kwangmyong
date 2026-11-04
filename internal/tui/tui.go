@@ -16,9 +16,9 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/0-draft/kwangmyong/internal/report"
-	"github.com/0-draft/kwangmyong/internal/scan"
-	"github.com/0-draft/kwangmyong/internal/ui"
+	"github.com/kanywst/kwangmyong/internal/report"
+	"github.com/kanywst/kwangmyong/internal/scan"
+	"github.com/kanywst/kwangmyong/internal/ui"
 )
 
 // Options configures a run.

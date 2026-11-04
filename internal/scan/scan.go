@@ -16,7 +16,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/0-draft/kwangmyong/internal/rules"
+	"github.com/kanywst/kwangmyong/internal/rules"
 )
 
 // Finding is one leak. Value is never serialised.

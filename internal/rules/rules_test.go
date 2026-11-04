@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/0-draft/kwangmyong/internal/identity"
+	"github.com/kanywst/kwangmyong/internal/identity"
 )
 
 func matcher(t *testing.T, id identity.Identity) *Matcher {

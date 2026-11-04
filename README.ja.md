@@ -13,10 +13,10 @@ git リポジトリの中からあなたを探します。名前、ログイン�
 ## インストール
 
 ```sh
-go install github.com/0-draft/kwangmyong/cmd/kwangmyong@latest
+go install github.com/kanywst/kwangmyong/cmd/kwangmyong@latest
 ```
 
-バイナリは [releases](https://github.com/0-draft/kwangmyong/releases) にあります。
+バイナリは [releases](https://github.com/kanywst/kwangmyong/releases) にあります。
 
 ## はじめかた
 
@@ -153,8 +153,8 @@ kwangmyong hook install   # このリポジトリに pre-commit、commit-msg、p
 
 ```yaml
 repos:
-  - repo: https://github.com/0-draft/kwangmyong
-    rev: v0.3.0
+  - repo: https://github.com/kanywst/kwangmyong
+    rev: v0.4.0
     hooks:
       - id: kwangmyong
       - id: kwangmyong-commit-msg
@@ -227,7 +227,7 @@ Cursor:
 - uses: actions/checkout@v7
   with:
     fetch-depth: 0 # --history には全 commit が要る
-- uses: 0-draft/kwangmyong@v0.3.0
+- uses: kanywst/kwangmyong@v0.4.0
   with:
     identity: ${{ secrets.KWANGMYONG_IDENTITY }}
     sarif: kwangmyong.sarif
@@ -253,10 +253,12 @@ v0.2.0 以降、各アーカイブには SBOM (`.sbom.json`) が付き、`checks
 
 ```sh
 cosign verify-blob checksums.txt --bundle checksums.txt.sigstore.json \
-  --certificate-identity-regexp '^https://github\.com/0-draft/kwangmyong/\.github/workflows/release\.yml@refs/tags/v' \
+  --certificate-identity-regexp '^https://github\.com/(kanywst|0-draft)/kwangmyong/\.github/workflows/release\.yml@refs/tags/v' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 sha256sum --ignore-missing -c checksums.txt
 ```
+
+v0.4.0 より前の release は `0-draft/kwangmyong` から出ていたので、正規表現はそちらも通します。
 
 ## 対象外
 

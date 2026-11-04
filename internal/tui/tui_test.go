@@ -7,9 +7,9 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/0-draft/kwangmyong/internal/identity"
-	"github.com/0-draft/kwangmyong/internal/rules"
-	"github.com/0-draft/kwangmyong/internal/scan"
+	"github.com/kanywst/kwangmyong/internal/identity"
+	"github.com/kanywst/kwangmyong/internal/rules"
+	"github.com/kanywst/kwangmyong/internal/scan"
 )
 
 // The fixture identity is fictional.

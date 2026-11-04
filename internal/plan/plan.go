@@ -12,8 +12,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/0-draft/kwangmyong/internal/rules"
-	"github.com/0-draft/kwangmyong/internal/scan"
+	"github.com/kanywst/kwangmyong/internal/rules"
+	"github.com/kanywst/kwangmyong/internal/scan"
 )
 
 var loginShaped = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)

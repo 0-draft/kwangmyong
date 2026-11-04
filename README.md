@@ -13,10 +13,10 @@ Coding agents write what they see, and what they see is your machine: `/Users/yo
 ## Install
 
 ```sh
-go install github.com/0-draft/kwangmyong/cmd/kwangmyong@latest
+go install github.com/kanywst/kwangmyong/cmd/kwangmyong@latest
 ```
 
-Or take a binary from [releases](https://github.com/0-draft/kwangmyong/releases).
+Or take a binary from [releases](https://github.com/kanywst/kwangmyong/releases).
 
 ## Start
 
@@ -153,8 +153,8 @@ kwangmyong hook install   # pre-commit, commit-msg and pre-push for this reposit
 
 ```yaml
 repos:
-  - repo: https://github.com/0-draft/kwangmyong
-    rev: v0.3.0
+  - repo: https://github.com/kanywst/kwangmyong
+    rev: v0.4.0
     hooks:
       - id: kwangmyong
       - id: kwangmyong-commit-msg
@@ -227,7 +227,7 @@ The adapters follow each agent's published hook format; fields that differ betwe
 - uses: actions/checkout@v7
   with:
     fetch-depth: 0 # --history needs every commit
-- uses: 0-draft/kwangmyong@v0.3.0
+- uses: kanywst/kwangmyong@v0.4.0
   with:
     identity: ${{ secrets.KWANGMYONG_IDENTITY }}
     sarif: kwangmyong.sarif
@@ -253,10 +253,12 @@ From v0.2.0, each archive ships an SBOM (`.sbom.json`), and `checksums.txt` is s
 
 ```sh
 cosign verify-blob checksums.txt --bundle checksums.txt.sigstore.json \
-  --certificate-identity-regexp '^https://github\.com/0-draft/kwangmyong/\.github/workflows/release\.yml@refs/tags/v' \
+  --certificate-identity-regexp '^https://github\.com/(kanywst|0-draft)/kwangmyong/\.github/workflows/release\.yml@refs/tags/v' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 sha256sum --ignore-missing -c checksums.txt
 ```
+
+Releases before v0.4.0 were published from `0-draft/kwangmyong`, which the regexp also accepts.
 
 ## Not covered
 

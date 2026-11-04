@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/0-draft/kwangmyong/internal/identity"
-	"github.com/0-draft/kwangmyong/internal/rules"
+	"github.com/kanywst/kwangmyong/internal/identity"
+	"github.com/kanywst/kwangmyong/internal/rules"
 )
 
 // The fixture identity is fictional.

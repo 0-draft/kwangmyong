@@ -5,10 +5,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/0-draft/kwangmyong/internal/identity"
-	"github.com/0-draft/kwangmyong/internal/rules"
-	"github.com/0-draft/kwangmyong/internal/scan"
-	"github.com/0-draft/kwangmyong/internal/ui"
+	"github.com/kanywst/kwangmyong/internal/identity"
+	"github.com/kanywst/kwangmyong/internal/rules"
+	"github.com/kanywst/kwangmyong/internal/scan"
+	"github.com/kanywst/kwangmyong/internal/ui"
 )
 
 func findings(t *testing.T, surface, location, text string) []scan.Finding {

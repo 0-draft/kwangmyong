@@ -1,4 +1,4 @@
-module github.com/0-draft/kwangmyong
+module github.com/kanywst/kwangmyong
 
 go 1.26.0
 

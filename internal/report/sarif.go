@@ -8,7 +8,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/0-draft/kwangmyong/internal/scan"
+	"github.com/kanywst/kwangmyong/internal/scan"
 )
 
 // SARIF writes findings as SARIF 2.1.0 for code scanning. Values are always
@@ -62,7 +62,7 @@ func SARIF(w io.Writer, fs []scan.Finding, version string) error {
 			seen[f.RuleID] = true
 			rules = append(rules, rule{
 				ID: f.RuleID, Name: f.RuleID, ShortDescription: text{"Leaks " + Label(f.RuleID)},
-				HelpURI: "https://github.com/0-draft/kwangmyong#rules", Default: map[string]string{"level": level},
+				HelpURI: "https://github.com/kanywst/kwangmyong#rules", Default: map[string]string{"level": level},
 			})
 		}
 		where, note := place(f)
@@ -93,7 +93,7 @@ func SARIF(w io.Writer, fs []scan.Finding, version string) error {
 		"version": "2.1.0",
 		"runs": []any{map[string]any{
 			"tool": map[string]any{"driver": map[string]any{
-				"name": "kwangmyong", "informationUri": "https://github.com/0-draft/kwangmyong",
+				"name": "kwangmyong", "informationUri": "https://github.com/kanywst/kwangmyong",
 				"version": version, "rules": rules,
 			}},
 			"results": results,

@@ -58,7 +58,7 @@ runs:
           case "$ACTION_REF" in v[0-9]*.*.*) ver="$ACTION_REF" ;; esac
         fi
         if [ -z "$ver" ]; then
-          ver=$(curl -fsSL -H "Authorization: Bearer $GH_TOKEN" https://api.github.com/repos/0-draft/kwangmyong/releases/latest | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p')
+          ver=$(curl -fsSL -H "Authorization: Bearer $GH_TOKEN" https://api.github.com/repos/kanywst/kwangmyong/releases/latest | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p')
         fi
         case "$RUNNER_OS" in
           Linux) os=linux ;;
@@ -71,7 +71,7 @@ runs:
           *) echo "::error::unsupported runner arch $RUNNER_ARCH" ; exit 1 ;;
         esac
         name="kwangmyong_${ver#v}_${os}_${arch}.tar.gz"
-        base="https://github.com/0-draft/kwangmyong/releases/download/$ver"
+        base="https://github.com/kanywst/kwangmyong/releases/download/$ver"
         tmp=$(mktemp -d "$RUNNER_TEMP/kwangmyong-dl.XXXXXX")
         curl -fsSL -o "$tmp/$name" "$base/$name"
         curl -fsSL -o "$tmp/checksums.txt" "$base/checksums.txt"
