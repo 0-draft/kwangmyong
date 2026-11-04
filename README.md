@@ -1,3 +1,5 @@
+<img src="docs/logo.png" width="160" alt="kwangmyong: a cartoon burglar holding a magnifying glass over an ID card">
+
 # kwangmyong
 
 English | [日本語](README.ja.md)
