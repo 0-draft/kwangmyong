@@ -66,7 +66,7 @@ func TestAgentLetsCleanCallsThrough(t *testing.T) {
 		{"cwd": dir, "tool_name": "run_shell_command", "tool_input": map[string]any{"command": "ls -la"}},
 		{"cwd": dir, "command": `gh pr create --title x --body "fix the parser"`},
 		{"cwd": dir, "tool_name": "read_file", "tool_input": map[string]any{"file_path": filepath.Join(dir, "README.md")}},
-		{"cwd": dir, "tool_name": "write_file", "tool_input": map[string]any{"file_path": "/tmp/scratch.md", "content": "Taro Yamada"}},
+		{"cwd": dir, "tool_name": "write_file", "tool_input": map[string]any{"file_path": filepath.Join(t.TempDir(), "scratch.md"), "content": "Taro Yamada"}},
 	} {
 		if r := agent(t, e, p); r.Block {
 			t.Errorf("blocked a clean call %+v:\n%s", p, r.Reason)
