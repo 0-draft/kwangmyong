@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/0-draft/kwangmyong/internal/report"
 	"github.com/0-draft/kwangmyong/internal/rules"
 	"github.com/0-draft/kwangmyong/internal/scan"
 )
@@ -19,6 +20,7 @@ import (
 // Result is a hook decision.
 type Result struct {
 	Block    bool
+	What     string // what was stopped, "this commit"
 	Reason   string
 	Findings []scan.Finding
 }
@@ -45,23 +47,8 @@ func decide(what string, fs []scan.Finding) Result {
 		return Result{}
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "kwangmyong: %s would publish your identity (%d finding(s)):\n", what, len(fs))
-	for i, f := range fs {
-		if i == 10 {
-			fmt.Fprintf(&b, "  … %d more\n", len(fs)-i)
-			break
-		}
-		loc := f.Surface + " " + f.Location
-		if f.Line > 0 {
-			loc += fmt.Sprintf(":%d", f.Line)
-		}
-		if f.Field != "" {
-			loc += " " + f.Field
-		}
-		fmt.Fprintf(&b, "  %s  %s  %s\n", f.RuleID, loc, f.Redacted)
-	}
-	b.WriteString("Use ~/ or repo-relative paths, your public handle instead of a real name, the GitHub noreply address as the commit email, and drop agent session links.")
-	return Result{Block: true, Reason: b.String(), Findings: fs}
+	_ = report.Blocked(&b, what, fs, report.Style{})
+	return Result{Block: true, What: what, Reason: b.String(), Findings: fs}
 }
 
 // PreCommit checks the staged diff and the pending identity. pending adds
@@ -206,7 +193,7 @@ func textFindings(env Env, surface, location string, texts ...string) []scan.Fin
 	for _, t := range texts {
 		for i, line := range strings.Split(t, "\n") {
 			for _, mt := range env.Matcher.Find(line) {
-				out = append(out, scan.Finding{RuleID: mt.RuleID, Severity: mt.Severity.String(), Surface: surface, Location: location, Line: i + 1, Count: 1, Value: mt.Value, Redacted: rules.Redact(mt.Value)})
+				out = append(out, scan.Finding{RuleID: mt.RuleID, Severity: mt.Severity.String(), Surface: surface, Location: location, Line: i + 1, Count: 1, Value: mt.Value, Redacted: rules.Redact(mt.Value)}.At(line, mt))
 			}
 		}
 	}

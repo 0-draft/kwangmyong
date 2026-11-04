@@ -3,10 +3,7 @@ package report
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
-	"strings"
-	"text/tabwriter"
 
 	"github.com/0-draft/kwangmyong/internal/scan"
 )
@@ -30,44 +27,8 @@ func Summarize(fs []scan.Finding) Summary {
 	return s
 }
 
-// Text writes a table. reveal prints raw values.
-func Text(w io.Writer, fs []scan.Finding, reveal bool) error {
-	if len(fs) == 0 {
-		_, err := fmt.Fprintln(w, "no identity leaks found")
-		return err
-	}
-	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	for _, f := range fs {
-		v := f.Redacted
-		if reveal {
-			v = f.Value
-		}
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", strings.ToUpper(f.Severity), f.RuleID, location(f), v)
-	}
-	if err := tw.Flush(); err != nil {
-		return err
-	}
-	s := Summarize(fs)
-	_, err := fmt.Fprintf(w, "\n%d findings (%d high, %d warn)\n", len(fs), s.High, s.Warn)
-	return err
-}
-
-func location(f scan.Finding) string {
-	loc := f.Surface + " " + f.Location
-	if f.Line > 0 {
-		loc += fmt.Sprintf(":%d", f.Line)
-	}
-	if f.Field != "" {
-		loc += " " + f.Field
-	}
-	if f.Count > 1 {
-		loc += fmt.Sprintf(" (x%d)", f.Count)
-	}
-	return loc
-}
-
 // JSON writes the summary and findings. reveal adds raw values.
-func JSON(w io.Writer, fs []scan.Finding, reveal bool) error {
+func JSON(w io.Writer, fs []scan.Finding, st *scan.Stats, reveal bool) error {
 	type out struct {
 		scan.Finding
 		Raw string `json:"raw,omitempty"`
@@ -83,7 +44,8 @@ func JSON(w io.Writer, fs []scan.Finding, reveal bool) error {
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
 	return enc.Encode(struct {
-		Summary  Summary `json:"summary"`
-		Findings []out   `json:"findings"`
-	}{Summarize(fs), items})
+		Summary  Summary     `json:"summary"`
+		Stats    *scan.Stats `json:"stats,omitempty"`
+		Findings []out       `json:"findings"`
+	}{Summarize(fs), st, items})
 }
