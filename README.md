@@ -162,7 +162,7 @@ kwangmyong hook install   # pre-commit, commit-msg and pre-push for this reposit
 ```yaml
 repos:
   - repo: https://github.com/kanywst/kwangmyong
-    rev: v0.4.1
+    rev: v0
     hooks:
       - id: kwangmyong
       - id: kwangmyong-commit-msg
@@ -235,7 +235,7 @@ The adapters follow each agent's published hook format; fields that differ betwe
 - uses: actions/checkout@v7
   with:
     fetch-depth: 0 # --history needs every commit
-- uses: kanywst/kwangmyong@v0.4.1
+- uses: kanywst/kwangmyong@v0
   with:
     identity: ${{ secrets.KWANGMYONG_IDENTITY }}
     sarif: kwangmyong.sarif
