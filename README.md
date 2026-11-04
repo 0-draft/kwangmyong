@@ -111,13 +111,64 @@ git filter-repo --sensitive-data-removal \
 
 ## Hooks
 
-| Hook | Command |
-| --- | --- |
-| git pre-commit | `kwangmyong hook pre-commit` |
-| git pre-push | `kwangmyong hook pre-push` |
-| Claude Code `PreToolUse` | `kwangmyong hook claude` |
+### git
 
-The Claude Code hook checks writes into a repository, `git commit`, `git push`, `gh` bodies and GitHub MCP writes, and exits `2` to block.
+```sh
+kwangmyong hook install   # pre-commit, commit-msg and pre-push for this repository
+```
+
+| Hook | Checks |
+| --- | --- |
+| `kwangmyong hook pre-commit` | the staged diff and the identity the commit will carry |
+| `kwangmyong hook commit-msg <file>` | the message, without comments or the verbose diff |
+| `kwangmyong hook pre-push` | every commit being pushed: metadata and contents |
+
+[pre-commit](https://pre-commit.com):
+
+```yaml
+repos:
+  - repo: https://github.com/0-draft/kwangmyong
+    rev: v0.3.0
+    hooks:
+      - id: kwangmyong
+      - id: kwangmyong-commit-msg
+      - id: kwangmyong-pre-push
+```
+
+lefthook:
+
+```yaml
+pre-commit:
+  commands:
+    kwangmyong:
+      run: kwangmyong hook pre-commit
+commit-msg:
+  commands:
+    kwangmyong:
+      run: kwangmyong hook commit-msg {1}
+pre-push:
+  commands:
+    kwangmyong:
+      run: kwangmyong hook pre-push
+      use_stdin: true
+```
+
+### Coding agents
+
+Each agent's pre-tool hook sends the tool call on stdin; kwangmyong checks shell commands (`git commit`, `git push`, `gh` bodies and body files), file writes into the repository, and GitHub MCP writes, and exits `2` to block with the reason on stderr.
+
+| Agent | Config | Entry |
+| --- | --- | --- |
+| Claude Code | `.claude/settings.json` | `PreToolUse`, matcher `Bash\|Write\|Edit\|MultiEdit\|NotebookEdit\|mcp__github__.*`, `kwangmyong hook claude` |
+| Codex CLI | `.codex/hooks.json` | `PreToolUse`, matcher `Bash\|apply_patch\|mcp__github__.*`, `kwangmyong hook codex` |
+| Gemini CLI | `.gemini/settings.json` | `BeforeTool`, matcher `run_shell_command\|write_file\|replace\|mcp_github_.*`, `kwangmyong hook gemini` |
+| Cursor | `.cursor/hooks.json` | `beforeShellExecution`, `beforeMCPExecution`, `preToolUse`: `kwangmyong hook cursor` |
+| GitHub Copilot | `.github/hooks/kwangmyong.json` | `preToolUse`: `kwangmyong hook copilot` |
+| Windsurf | `.windsurf/hooks.json` | `pre_run_command`, `pre_write_code`, `pre_mcp_tool_use`: `kwangmyong hook windsurf` |
+| Kiro | `.kiro/hooks/kwangmyong.json` | `PreToolUse`, matcher `shell\|write\|@mcp`: `kwangmyong hook kiro` |
+| Devin | `.devin/hooks.v1.json` | `PreToolUse`: `kwangmyong hook devin` |
+
+Claude Code:
 
 ```json
 {
@@ -129,30 +180,46 @@ The Claude Code hook checks writes into a repository, `git commit`, `git push`, 
 }
 ```
 
-[pre-commit](https://pre-commit.com):
+Cursor:
 
-```yaml
-repos:
-  - repo: https://github.com/0-draft/kwangmyong
-    rev: v0.1.2
-    hooks:
-      - id: kwangmyong
-      - id: kwangmyong-pre-push
+```json
+{
+  "version": 1,
+  "hooks": {
+    "beforeShellExecution": [{ "command": "kwangmyong hook cursor" }],
+    "beforeMCPExecution": [{ "command": "kwangmyong hook cursor" }],
+    "preToolUse": [{ "command": "kwangmyong hook cursor", "matcher": "Write" }]
+  }
+}
 ```
 
-lefthook:
+The adapters follow each agent's published hook format; fields that differ between versions are probed rather than assumed.
+
+## CI
 
 ```yaml
-pre-commit:
-  commands:
-    kwangmyong:
-      run: kwangmyong hook pre-commit
-pre-push:
-  commands:
-    kwangmyong:
-      run: kwangmyong hook pre-push
-      use_stdin: true
+- uses: actions/checkout@v7
+  with:
+    fetch-depth: 0 # --history needs every commit
+- uses: 0-draft/kwangmyong@v0.3.0
+  with:
+    identity: ${{ secrets.KWANGMYONG_IDENTITY }}
+    sarif: kwangmyong.sarif
+- uses: github/codeql-action/upload-sarif@v4
+  if: always()
+  with:
+    sarif_file: kwangmyong.sarif
 ```
+
+The action installs the release binary after checking it against `checksums.txt` and runs `scan --history --strict .` (change it with `args`). The identity comes from a secret in TOML, the same keys as the `[identity]` table:
+
+```toml
+names  = ["Taro Yamada", "山田 太郎"]
+logins = ["tyamada"]
+emails = ["taro@example.com"]
+```
+
+Anywhere else, set `KWANGMYONG_IDENTITY` to the same TOML. A malformed value fails without echoing it. Output is masked in logs, and `--format sarif` is always masked whatever `--reveal` says.
 
 ## Not covered
 
