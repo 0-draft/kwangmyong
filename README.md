@@ -42,7 +42,19 @@ kwangmyong plan .                # git filter-repo inputs and a rewrite checklis
 
 Exit status: `0` clean, `1` leaks, `2` error.
 
-The text report has three parts:
+On a terminal, `scan` and `github` open an interactive view: the sweep runs with a live count, then every place you were found is listed next to the masked line, what leaks, why it matters, where else the same value is, and the fix.
+
+| Key | |
+| --- | --- |
+| `↑` `↓` `j` `k` | move |
+| `←` `→` `tab` `1`-`5` | all, files, history, metadata, GitHub |
+| `/` | search (masked text only, so it cannot reveal a value) |
+| `r` | show values on this screen only |
+| `e` | open the file at the line in `$VISUAL` or `$EDITOR` |
+| `p` | draft the history rewrite (`kwangmyong plan`) |
+| `q` | quit; the verdict stays in the scrollback |
+
+A clean sweep closes on its own. Piped output, `CI`, `--no-tui`, `KWANGMYONG_NO_TUI` and `--format json|sarif` print the report instead, which has three parts:
 
 - each place you were found: the line, with the value masked to a prefix and a fingerprint (`ta…[27fc08b6]`) and underlined with what it gives away
 - an intel report: each kind of information about you, how often and where
