@@ -72,7 +72,7 @@ type Meta struct {
 
 // Banner is the header line every report starts with.
 func Banner(s ui.Style, target string) string {
-	b := s.Paint(ui.Bold+ui.Red, "★ 광명 KWANGMYONG ★")
+	b := s.Paint(ui.Bold+ui.Red, "★ KWANGMYONG ★")
 	if target != "" {
 		b += s.Paint(ui.Dim, "  recon on ") + s.Paint(ui.Bold, target) + s.Paint(ui.Dim, " · target: you")
 	}
