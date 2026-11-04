@@ -1,0 +1,98 @@
+name: kwangmyong
+description: Find your own identity (name, login, email, hostname, home paths, agent session links) in a repository before it ships.
+branding:
+  icon: eye-off
+  color: red
+
+inputs:
+  identity:
+    description: >
+      Who to look for, as TOML (the keys of the [identity] table, or a whole
+      config). Keep it in a secret. Without it only the generic rules run.
+    required: false
+    default: ""
+  args:
+    description: Arguments to kwangmyong.
+    required: false
+    default: scan --history --strict .
+  sarif:
+    description: Also write a masked SARIF report to this path, for github/codeql-action/upload-sarif.
+    required: false
+    default: ""
+  version:
+    description: >
+      Release tag to install (v0.3.0). Defaults to this action's tag when it is
+      one, else the latest release. "source" builds from the action checkout.
+    required: false
+    default: ""
+  token:
+    description: Token for the GitHub API (release lookup, and `kwangmyong github`).
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  sarif:
+    description: Path of the SARIF report, when one was asked for.
+    value: ${{ steps.run.outputs.sarif }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install kwangmyong
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+        ACTION_REF: ${{ github.action_ref }}
+        GH_TOKEN: ${{ inputs.token }}
+      run: |
+        set -euo pipefail
+        bin="$RUNNER_TEMP/kwangmyong-bin"
+        mkdir -p "$bin"
+        if [ "$VERSION" = source ]; then
+          (cd "$GITHUB_ACTION_PATH" && go build -trimpath -o "$bin/kwangmyong" ./cmd/kwangmyong)
+          echo "$bin" >> "$GITHUB_PATH"
+          exit 0
+        fi
+        ver="$VERSION"
+        if [ -z "$ver" ]; then
+          case "$ACTION_REF" in v[0-9]*.*.*) ver="$ACTION_REF" ;; esac
+        fi
+        if [ -z "$ver" ]; then
+          ver=$(curl -fsSL -H "Authorization: Bearer $GH_TOKEN" https://api.github.com/repos/0-draft/kwangmyong/releases/latest | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p')
+        fi
+        case "$RUNNER_OS" in
+          Linux) os=linux ;;
+          macOS) os=darwin ;;
+          *) echo "::error::kwangmyong action supports Linux and macOS runners" ; exit 1 ;;
+        esac
+        case "$RUNNER_ARCH" in
+          X64) arch=amd64 ;;
+          ARM64) arch=arm64 ;;
+          *) echo "::error::unsupported runner arch $RUNNER_ARCH" ; exit 1 ;;
+        esac
+        name="kwangmyong_${ver#v}_${os}_${arch}.tar.gz"
+        base="https://github.com/0-draft/kwangmyong/releases/download/$ver"
+        tmp=$(mktemp -d "$RUNNER_TEMP/kwangmyong-dl.XXXXXX")
+        curl -fsSL -o "$tmp/$name" "$base/$name"
+        curl -fsSL -o "$tmp/checksums.txt" "$base/checksums.txt"
+        (cd "$tmp" && grep " $name\$" checksums.txt | { sha256sum -c - 2>/dev/null || shasum -a 256 -c -; })
+        tar -xzf "$tmp/$name" -C "$bin" kwangmyong
+        echo "$bin" >> "$GITHUB_PATH"
+        echo "kwangmyong $ver"
+
+    - name: Run kwangmyong
+      id: run
+      shell: bash
+      env:
+        KWANGMYONG_IDENTITY: ${{ inputs.identity }}
+        ARGS: ${{ inputs.args }}
+        SARIF: ${{ inputs.sarif }}
+        GH_TOKEN: ${{ inputs.token }}
+      run: |
+        set -uo pipefail
+        read -ra argv <<< "$ARGS"
+        if [ -n "$SARIF" ]; then
+          kwangmyong "${argv[0]}" --format sarif "${argv[@]:1}" > "$SARIF" || true
+          echo "sarif=$SARIF" >> "$GITHUB_OUTPUT"
+        fi
+        kwangmyong "${argv[@]}"
