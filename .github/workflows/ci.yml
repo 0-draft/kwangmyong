@@ -86,3 +86,45 @@ jobs:
           go-version-file: go.mod
       - name: kwangmyong scans itself
         run: go run ./cmd/kwangmyong scan --history --strict .
+
+  action:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Build the demo repositories
+        env:
+          GIT_AUTHOR_NAME: ci
+          GIT_AUTHOR_EMAIL: ci@example.com
+          GIT_COMMITTER_NAME: ci
+          GIT_COMMITTER_EMAIL: ci@example.com
+        run: docs/demo/setup.sh "$GITHUB_WORKSPACE/.demo"
+      - name: A clean repository passes
+        uses: ./
+        with:
+          version: source
+          identity: ${{ env.DEMO_IDENTITY }}
+          args: scan --history --strict .demo/clean
+      - name: A leaking repository fails
+        id: exposed
+        continue-on-error: true
+        uses: ./
+        with:
+          version: source
+          identity: ${{ env.DEMO_IDENTITY }}
+          args: scan --history --strict .demo/repo
+          sarif: exposed.sarif
+      - name: It failed, and the SARIF is masked
+        env:
+          OUTCOME: ${{ steps.exposed.outcome }}
+        run: |
+          test "$OUTCOME" = failure
+          test "$(jq '.runs[0].results | length' exposed.sarif)" -ge 6
+          ! grep -q -e tyamada -e Taros-MacBook exposed.sarif
+    env:
+      DEMO_IDENTITY: |
+        names  = ["Taro Yamada", "山田 太郎"]
+        logins = ["tyamada"]
+        hosts  = ["Taros-MacBook-Pro"]
