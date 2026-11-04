@@ -24,6 +24,7 @@ archives:
     files:
       - LICENSE
       - README.md
+      - README.ja.md
 
 checksum:
   name_template: checksums.txt
