@@ -2,3 +2,5 @@
 [allow]
 # Test fixtures and the demo use a fictional identity and fictional home paths on purpose.
 paths = ["**/*_test.go", "docs/demo/**"]
+# The docs use the same fictional developer (Taro Yamada, login tyamada).
+values = ["^tyamada$"]
