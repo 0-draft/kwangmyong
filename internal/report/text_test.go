@@ -1,6 +1,7 @@
 package report
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -261,5 +262,42 @@ func TestHeadersAreMasked(t *testing.T) {
 	fs := matchAll(t, identity.Identity{Logins: []string{"tyamada"}}, scan.SurfacePath, "docs/tyamada-notes.md", "docs/tyamada-notes.md")
 	if out := renderMeta(t, fs, Meta{Target: "/srv/tyamada/repo"}, Style{}); strings.Contains(out, "tyamada") {
 		t.Errorf("a header shows the value:\n%s", out)
+	}
+}
+
+func TestSARIFIsMaskedAndValid(t *testing.T) {
+	fs := findings(t, scan.SurfaceFile, "test.log", "tyamada@Taros-MacBook-Pro app % make test")
+	fs = append(fs, scan.Finding{RuleID: "identity.name", Severity: "high", Surface: scan.SurfaceCommit, Location: "abc1234", Field: "author.name", Count: 3, Value: "Taro Yamada", Redacted: rules.Redact("Taro Yamada")})
+	var b strings.Builder
+	if err := SARIF(&b, fs, "v0.0.0"); err != nil {
+		t.Fatal(err)
+	}
+	out := b.String()
+	if strings.Contains(out, "tyamada") || strings.Contains(out, "Taros-MacBook") || strings.Contains(out, "Taro Yamada") {
+		t.Errorf("raw value in SARIF:\n%s", out)
+	}
+	var doc struct {
+		Version string `json:"version"`
+		Runs    []struct {
+			Results []struct {
+				Level     string `json:"level"`
+				Locations []struct {
+					Physical *struct {
+						Artifact struct{ URI string } `json:"artifactLocation"`
+					} `json:"physicalLocation"`
+					Logical []struct{ Name string } `json:"logicalLocations"`
+				} `json:"locations"`
+			} `json:"results"`
+		} `json:"runs"`
+	}
+	if err := json.Unmarshal([]byte(out), &doc); err != nil || doc.Version != "2.1.0" || len(doc.Runs) != 1 || len(doc.Runs[0].Results) != 3 {
+		t.Fatalf("bad SARIF: %v\n%s", err, out)
+	}
+	r := doc.Runs[0].Results
+	if r[0].Level != "error" || r[0].Locations[0].Physical == nil || r[0].Locations[0].Physical.Artifact.URI != "test.log" {
+		t.Errorf("file result: %+v", r[0])
+	}
+	if r[2].Locations[0].Physical != nil || len(r[2].Locations[0].Logical) != 1 {
+		t.Errorf("commit result should have a logical location: %+v", r[2])
 	}
 }

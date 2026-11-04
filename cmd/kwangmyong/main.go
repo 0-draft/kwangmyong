@@ -228,7 +228,7 @@ func cmdScan(args []string, stdout, stderr io.Writer) (int, error) {
 	history := fs.Bool("history", false, "also scan every blob in git history")
 	noTree := fs.Bool("no-tree", false, "skip tracked files")
 	noMeta := fs.Bool("no-meta", false, "skip commit and tag metadata")
-	format := fs.String("format", "text", "output format: text or json")
+	format := fs.String("format", "text", "output format: text, json or sarif (sarif is always masked)")
 	reveal := fs.Bool("reveal", false, "print raw matched values (local terminal only)")
 	strict := fs.Bool("strict", false, "fail on warn findings too")
 	maxSize := fs.Int64("max-file-size", 5<<20, "skip files larger than this many bytes")
@@ -240,7 +240,7 @@ func cmdScan(args []string, stdout, stderr io.Writer) (int, error) {
 	if fs.NArg() > 0 {
 		root = fs.Arg(0)
 	}
-	if *format != "text" && *format != "json" {
+	if *format != "text" && *format != "json" && *format != "sarif" {
 		return 2, fmt.Errorf("unknown format %q", *format)
 	}
 
@@ -402,9 +402,12 @@ func (c *common) matcher(root string, stderr io.Writer) (*rules.Matcher, identit
 
 func finish(stdout io.Writer, format string, st report.Style, strict bool, findings []scan.Finding, meta report.Meta) (int, error) {
 	var err error
-	if format == "json" {
+	switch format {
+	case "json":
 		err = report.JSON(stdout, findings, meta.Stats, st.Reveal)
-	} else {
+	case "sarif":
+		err = report.SARIF(stdout, findings, currentVersion())
+	default:
 		err = report.Text(stdout, findings, meta, st)
 	}
 	if err != nil {
@@ -427,7 +430,7 @@ func cmdGitHub(args []string, stdout, stderr io.Writer) (int, error) {
 	archived := fs.Bool("archived", true, "include archived repositories")
 	reviews := fs.Bool("reviews", true, "scan pull request review bodies (one request per PR)")
 	gists := fs.Bool("gists", true, "scan the owner's gists")
-	format := fs.String("format", "text", "output format: text or json")
+	format := fs.String("format", "text", "output format: text, json or sarif (sarif is always masked)")
 	reveal := fs.Bool("reveal", false, "print raw matched values (local terminal only)")
 	strict := fs.Bool("strict", false, "fail on warn findings too")
 	if err := fs.Parse(args); err != nil {
@@ -436,7 +439,7 @@ func cmdGitHub(args []string, stdout, stderr io.Writer) (int, error) {
 	if fs.NArg() != 1 {
 		return 2, errors.New("usage: kwangmyong github [flags] <owner>[/repo]")
 	}
-	if *format != "text" && *format != "json" {
+	if *format != "text" && *format != "json" && *format != "sarif" {
 		return 2, fmt.Errorf("unknown format %q", *format)
 	}
 	owner, repo, _ := strings.Cut(fs.Arg(0), "/")
