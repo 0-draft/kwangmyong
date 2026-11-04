@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"io"
 
-	"github.com/0-draft/kwangmyong/internal/scan"
+	"github.com/kanywst/kwangmyong/internal/scan"
 )
 
 // Summary counts findings by severity.

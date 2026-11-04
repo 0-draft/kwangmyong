@@ -19,8 +19,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/0-draft/kwangmyong/internal/rules"
-	"github.com/0-draft/kwangmyong/internal/scan"
+	"github.com/kanywst/kwangmyong/internal/rules"
+	"github.com/kanywst/kwangmyong/internal/scan"
 )
 
 // Surface of every finding from this package.

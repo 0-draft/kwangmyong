@@ -3,7 +3,7 @@ package report
 import (
 	"strings"
 
-	"github.com/0-draft/kwangmyong/internal/scan"
+	"github.com/kanywst/kwangmyong/internal/scan"
 )
 
 // Group is the findings on one line of one place, shown as one frame.

@@ -8,8 +8,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/0-draft/kwangmyong/internal/scan"
-	"github.com/0-draft/kwangmyong/internal/ui"
+	"github.com/kanywst/kwangmyong/internal/scan"
+	"github.com/kanywst/kwangmyong/internal/ui"
 )
 
 // Style controls the text renderer.

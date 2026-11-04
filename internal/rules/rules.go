@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/0-draft/kwangmyong/internal/identity"
+	"github.com/kanywst/kwangmyong/internal/identity"
 )
 
 // Severity of a finding.

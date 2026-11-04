@@ -12,9 +12,9 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/0-draft/kwangmyong/internal/report"
-	"github.com/0-draft/kwangmyong/internal/rules"
-	"github.com/0-draft/kwangmyong/internal/scan"
+	"github.com/kanywst/kwangmyong/internal/report"
+	"github.com/kanywst/kwangmyong/internal/rules"
+	"github.com/kanywst/kwangmyong/internal/scan"
 )
 
 // Result is a hook decision.
