@@ -111,9 +111,11 @@ func generic() []Rule {
 		},
 		{
 			// Coding agents link their session from commits and PR bodies.
+			// High like autogen-email: in your repository it is your account,
+			// and hooks only block on high.
 			ID:       "generic.agent-session-url",
-			Severity: Warn,
-			re:       regexp.MustCompile(`https?://(?:claude\.ai/code/(session_[A-Za-z0-9]+)|chatgpt\.com/codex/tasks/(task_[A-Za-z0-9_]+))`),
+			Severity: High,
+			re:       regexp.MustCompile(`(?i:https?://(?:www\.)?)(?:(?i:claude\.ai/code/)(session_[A-Za-z0-9]+)|(?i:chatgpt\.com/codex/tasks/)(task_[A-Za-z0-9_]+))`),
 			whole:    true,
 		},
 	}

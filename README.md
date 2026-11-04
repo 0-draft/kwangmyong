@@ -67,8 +67,8 @@ values = ["^example$"]
 | --- | --- |
 | `identity.email`, `.name`, `.login`, `.host`, `.literal` | high |
 | `generic.autogen-email` (`user@Host.local`) | high |
+| `generic.agent-session-url` (Claude Code and Codex session links) | high |
 | `generic.home-path` (anyone's home path) | warn |
-| `generic.agent-session-url` (Claude Code and Codex session links) | warn |
 | `github.unclaimed-handle` (a declared login free to register) | warn |
 
 `--strict` fails on warn.

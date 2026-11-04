@@ -60,7 +60,7 @@ func decide(what string, fs []scan.Finding) Result {
 		}
 		fmt.Fprintf(&b, "  %s  %s  %s\n", f.RuleID, loc, f.Redacted)
 	}
-	b.WriteString("Use ~/ or repo-relative paths, your public handle instead of a real name, and the GitHub noreply address as the commit email.")
+	b.WriteString("Use ~/ or repo-relative paths, your public handle instead of a real name, the GitHub noreply address as the commit email, and drop agent session links.")
 	return Result{Block: true, Reason: b.String(), Findings: fs}
 }
 
