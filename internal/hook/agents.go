@@ -30,11 +30,11 @@ func Agent(env Env, payload io.Reader) (Result, error) {
 		if r.Block && !all.Block {
 			all = r
 		} else if r.Block {
-			all.Findings = append(all.Findings, r.Findings...)
+			all.All = append(all.All, r.All...)
 		}
 	}
 	if all.Block {
-		return decide(all.What, all.Findings), nil
+		return decide(all.What, all.All), nil
 	}
 	return Result{}, nil
 }
