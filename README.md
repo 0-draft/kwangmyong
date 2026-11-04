@@ -12,11 +12,11 @@ go install github.com/0-draft/kwangmyong/cmd/kwangmyong@latest
 
 Binaries are on the [releases](https://github.com/0-draft/kwangmyong/releases) page.
 
-Each archive has an SBOM (`.sbom.json`), and `checksums.txt` is signed with cosign keyless:
+From v0.2.0, each archive has an SBOM (`.sbom.json`), and `checksums.txt` is signed with cosign keyless by the release workflow:
 
 ```sh
 cosign verify-blob checksums.txt --bundle checksums.txt.sigstore.json \
-  --certificate-identity-regexp '^https://github.com/0-draft/kwangmyong/' \
+  --certificate-identity-regexp '^https://github\.com/0-draft/kwangmyong/\.github/workflows/release\.yml@refs/tags/v' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 sha256sum --ignore-missing -c checksums.txt
 ```
