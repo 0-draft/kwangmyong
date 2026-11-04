@@ -76,9 +76,12 @@ func TestRunGitRepo(t *testing.T) {
 	write(t, filepath.Join(dir, ".gitignore"), "ignored.md\n")
 	write(t, filepath.Join(dir, "ignored.md"), "Taro Yamada\n")
 
-	got, err := Run(newMatcher(t), Options{Root: dir, Tree: true, Meta: true, History: true, AllowPaths: []string{"testdata/**"}})
+	got, st, err := RunStats(newMatcher(t), Options{Root: dir, Tree: true, Meta: true, History: true, AllowPaths: []string{"testdata/**"}})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if st.Commits != 2 || st.Tags != 1 || st.Blobs < 1 || st.Files < 2 {
+		t.Errorf("stats: %+v", st)
 	}
 	s := bySurface(got)
 	if len(s[SurfaceFile]) != 1 || s[SurfaceFile][0].Location != "untracked.md" {
@@ -98,6 +101,16 @@ func TestRunGitRepo(t *testing.T) {
 	}
 	if len(s[SurfaceTag]) == 0 {
 		t.Error("tag message leak not found")
+	}
+	for _, f := range s[SurfaceCommit] {
+		if f.Field == "message" && (f.Context != "Signed-off-by: Taro Yamada <taro@example.com>" || f.Context[f.Start:f.End] != f.Value) {
+			t.Errorf("message context: %q [%d:%d] value %q", f.Context, f.Start, f.End, f.Value)
+		}
+	}
+	for _, f := range s[SurfaceFile] {
+		if f.Context[f.Start:f.End] != f.Value {
+			t.Errorf("file span %q != value %q", f.Context[f.Start:f.End], f.Value)
+		}
 	}
 	for _, f := range got {
 		if f.Redacted == f.Value {

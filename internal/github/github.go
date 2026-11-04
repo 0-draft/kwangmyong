@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/0-draft/kwangmyong/internal/rules"
@@ -177,6 +178,7 @@ type Options struct {
 	Gists           bool     // the owner's gists (secret ones too when it is you)
 	Handles         []string // former usernames to check for takeover
 	Concurrency     int
+	Progress        func(done, total int) // called after each repository
 }
 
 // Scanner runs a GitHub scan.
@@ -237,7 +239,7 @@ func (s *Scanner) text(location, field, text string) {
 				RuleID: mt.RuleID, Severity: mt.Severity.String(), Surface: Surface,
 				Location: location, Field: field, Line: i + 1, Count: 1,
 				Value: mt.Value, Redacted: rules.Redact(mt.Value),
-			})
+			}.At(line, mt))
 			s.mu.Unlock()
 		}
 	}
@@ -264,6 +266,10 @@ func (s *Scanner) Run(ctx context.Context, opt Options) ([]scan.Finding, error) 
 		return nil, err
 	}
 	sem := make(chan struct{}, opt.Concurrency)
+	var done atomic.Int64
+	if opt.Progress != nil {
+		opt.Progress(0, len(repos))
+	}
 	var wg sync.WaitGroup
 	var errMu sync.Mutex
 	var firstErr error
@@ -273,6 +279,11 @@ func (s *Scanner) Run(ctx context.Context, opt Options) ([]scan.Finding, error) 
 		go func(r repo) {
 			defer wg.Done()
 			defer func() { <-sem }()
+			defer func() {
+				if opt.Progress != nil {
+					opt.Progress(int(done.Add(1)), len(repos))
+				}
+			}()
 			if err := s.repo(ctx, r, opt); err != nil {
 				errMu.Lock()
 				if firstErr == nil {
