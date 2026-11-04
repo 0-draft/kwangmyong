@@ -131,3 +131,24 @@ func TestBlocked(t *testing.T) {
 		t.Errorf("blocked message:\n%s", out)
 	}
 }
+
+func TestTextMasksValuesCountedElsewhere(t *testing.T) {
+	// The name's finding is shown on this line; the host's finding was
+	// aggregated under another commit, so its span is not in this group.
+	line := "Signed-off-by: Taro Yamada <taro@Taros-MacBook-Pro>"
+	fs := findings(t, scan.SurfaceCommit, "aaaaaaa", line)
+	var name, host scan.Finding
+	for _, f := range fs {
+		if f.RuleID == "identity.host" {
+			host = f
+		} else if strings.HasPrefix(f.RuleID, "identity.name") {
+			name = f
+		}
+	}
+	host.Location, host.Context = "bbbbbbb", "Taros-MacBook-Pro"
+	host.Start, host.End = 0, len(host.Context)
+	out := render(t, []scan.Finding{name, host}, nil, Style{})
+	if strings.Contains(out, "Taros-MacBook") || strings.Contains(out, "Taro Yamada") {
+		t.Errorf("value from another group printed raw:\n%s", out)
+	}
+}

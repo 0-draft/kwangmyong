@@ -3,6 +3,7 @@ package report
 import (
 	"fmt"
 	"io"
+	"regexp"
 	"sort"
 	"strings"
 	"unicode/utf8"
@@ -15,6 +16,47 @@ import (
 type Style struct {
 	ui.Style
 	Reveal bool // raw values instead of prefix + fingerprint
+
+	others *regexp.Regexp // every value found, to mask wherever it appears
+	redact map[string]string
+}
+
+// withOthers arms s to mask every value in fs inside any context line, not
+// only the span its own finding points at: a line shown for one finding can
+// hold a value whose finding was counted somewhere else.
+func (s Style) withOthers(fs []scan.Finding) Style {
+	if s.Reveal {
+		return s
+	}
+	s.redact = map[string]string{}
+	var alts []string
+	for _, f := range fs {
+		k := strings.ToLower(f.Value)
+		if f.Value == "" || s.redact[k] != "" {
+			continue
+		}
+		s.redact[k] = f.Redacted
+		alts = append(alts, regexp.QuoteMeta(f.Value))
+	}
+	if len(alts) == 0 {
+		return s
+	}
+	sort.Slice(alts, func(i, j int) bool { return len(alts[i]) > len(alts[j]) })
+	s.others = regexp.MustCompile("(?i)" + strings.Join(alts, "|"))
+	return s
+}
+
+// scrub masks any found value left in plain text.
+func (s Style) scrub(t string) string {
+	if s.others == nil {
+		return t
+	}
+	return s.others.ReplaceAllStringFunc(t, func(v string) string {
+		if r, ok := s.redact[strings.ToLower(v)]; ok {
+			return r
+		}
+		return v
+	})
 }
 
 // Meta is what the verdict can say about the scan itself.
@@ -135,6 +177,7 @@ func place(f scan.Finding) (where, note string) {
 // Text renders findings as masked, underlined lines, what they give away,
 // and a verdict.
 func Text(w io.Writer, fs []scan.Finding, meta Meta, s Style) error {
+	s = s.withOthers(fs)
 	var b strings.Builder
 	b.WriteString(Banner(s.Style, meta.Target))
 	gs := groups(fs)
@@ -152,6 +195,7 @@ func Text(w io.Writer, fs []scan.Finding, meta Meta, s Style) error {
 
 // Blocked renders what a hook prints when it stops what.
 func Blocked(w io.Writer, what string, fs []scan.Finding, s Style) error {
+	s = s.withOthers(fs)
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s %s\n\n", s.Paint(ui.Bold+ui.Red, "✗ TRANSMISSION BLOCKED."), s.Paint(ui.Bold, "kwangmyong stopped "+what+": it would hand out intel on you."))
 	gs := groups(fs)
@@ -243,7 +287,7 @@ func (s Style) mask(items []scan.Finding) (string, []mark) {
 		if f.Start < at {
 			continue
 		}
-		ps = append(ps, piece{text: plain(ctx[at:f.Start])})
+		ps = append(ps, piece{text: plain(s.scrub(ctx[at:f.Start]))})
 		v := f.Redacted
 		if s.Reveal {
 			v = f.Value
@@ -251,7 +295,7 @@ func (s Style) mask(items []scan.Finding) (string, []mark) {
 		ps = append(ps, piece{text: plain(v), f: f})
 		at = f.End
 	}
-	ps = append(ps, piece{text: plain(ctx[at:])})
+	ps = append(ps, piece{text: plain(s.scrub(ctx[at:]))})
 
 	total := 0
 	for _, p := range ps {
