@@ -52,6 +52,24 @@ func decide(what string, all []scan.Finding) Result {
 	return Result{Block: true, What: what, Reason: b.String(), Findings: fs, All: all}
 }
 
+// CommitMsg checks the message git is about to commit, minus its comments.
+func CommitMsg(env Env, path string) (Result, error) {
+	data, err := os.ReadFile(path) //nolint:gosec // git passes the message file
+	if err != nil {
+		return Result{}, err
+	}
+	var keep []string
+	for _, l := range strings.Split(string(data), "\n") {
+		if strings.HasPrefix(l, "# ------------------------ >8") {
+			break // everything below is the verbose diff
+		}
+		if !strings.HasPrefix(l, "#") {
+			keep = append(keep, l)
+		}
+	}
+	return decide("this commit message", textFindings(env, "message", "commit message", strings.Join(keep, "\n"))), nil
+}
+
 // PreCommit checks the staged diff and the pending identity. pending adds
 // unstaged and untracked changes, for `git add -A && git commit`.
 func PreCommit(env Env, dir string, pending bool) (Result, error) {
@@ -135,15 +153,20 @@ func Claude(env Env, payload io.Reader) (Result, error) {
 	}
 	var in toolInput
 	_ = json.Unmarshal(p.ToolInput, &in) // unknown tools carry other shapes
-	cwd := p.Cwd
+	var raw any
+	_ = json.Unmarshal(p.ToolInput, &raw)
+	return check(env, p.Cwd, p.ToolName, in, raw)
+}
+
+// check decides on one tool call in Claude Code's terms.
+func check(env Env, cwd, name string, in toolInput, raw any) (Result, error) {
 	if cwd == "" {
 		cwd = "."
 	}
-
 	switch {
-	case p.ToolName == "Bash":
+	case name == "Bash":
 		return claudeBash(env, cwd, in.Command)
-	case p.ToolName == "Write" || p.ToolName == "Edit" || p.ToolName == "MultiEdit" || p.ToolName == "NotebookEdit":
+	case name == "Write" || name == "Edit" || name == "MultiEdit" || name == "NotebookEdit":
 		texts := []string{in.Content, in.NewString, in.NewSource}
 		for _, e := range in.Edits {
 			texts = append(texts, e.NewString)
@@ -152,10 +175,8 @@ func Claude(env Env, payload io.Reader) (Result, error) {
 			return Result{}, nil // scratch and ignored files never reach git
 		}
 		return decide("this write to "+filepath.Base(in.FilePath), textFindings(env, "write", filepath.Base(in.FilePath), texts...)), nil
-	case strings.HasPrefix(p.ToolName, "mcp__github__"):
-		var v any
-		_ = json.Unmarshal(p.ToolInput, &v)
-		return decide("this GitHub write", textFindings(env, "github", p.ToolName, strings.Join(stringsIn(v), "\n"))), nil
+	case strings.HasPrefix(name, "mcp__github__"):
+		return decide("this GitHub write", textFindings(env, "github", name, strings.Join(stringsIn(raw), "\n"))), nil
 	}
 	return Result{}, nil
 }
