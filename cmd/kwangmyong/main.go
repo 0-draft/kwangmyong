@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime/debug"
+	"slices"
 	"strings"
 	"sync"
 
@@ -136,7 +137,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	case "plan":
 		err = cmdPlan(args[1:], stdout, stderr)
 	case "hook":
-		code, err = cmdHook(args[1:], os.Stdin, stderr)
+		code, err = cmdHook(args[1:], os.Stdin, stdout, stderr)
 	case "init":
 		err = cmdInit(stdout)
 	case "identity":
@@ -576,17 +577,23 @@ func resolveTarget(root, flagValue string) (plan.Target, error) {
 	return plan.Target{Name: name, Email: email}, nil
 }
 
-func cmdHook(args []string, stdin io.Reader, stderr io.Writer) (int, error) {
+const hookKinds = "claude|codex|gemini|cursor|copilot|windsurf|kiro|devin|pre-commit|commit-msg|pre-push|install"
+
+func cmdHook(args []string, stdin io.Reader, stdout, stderr io.Writer) (int, error) {
 	if len(args) == 0 {
-		return 2, errors.New("usage: kwangmyong hook <claude|pre-commit|pre-push>")
+		return 2, errors.New("usage: kwangmyong hook <" + hookKinds + ">")
 	}
 	fs := flag.NewFlagSet("hook", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	usageFor(fs, stderr, "hook <claude|pre-commit|pre-push> [flags]", "Run as a guard. Reads the hook payload on stdin. Blocks with exit 1\n(exit 2 for claude, which Claude Code treats as a block).")
+	usageFor(fs, stderr, "hook <"+hookKinds+"> [flags]", "Run as a guard. Agents send their pre-tool payload on stdin and get exit 2 to\nblock; git hooks get exit 1. `hook install` sets up this repository's git hooks.")
 	var c common
 	c.register(fs)
+	force := fs.Bool("force", false, "install: replace existing git hooks")
 	if err := fs.Parse(args[1:]); err != nil {
 		return 2, err
+	}
+	if args[0] == "install" {
+		return 0, installHooks(".", *force, stdout)
 	}
 	root := "."
 	m, _, allowPaths, err := c.matcher(root, io.Discard)
@@ -602,10 +609,19 @@ func cmdHook(args []string, stdin io.Reader, stderr io.Writer) (int, error) {
 		r, err = hook.Claude(env, stdin)
 	case "pre-commit":
 		r, err = hook.PreCommit(env, root, false)
+	case "commit-msg":
+		if fs.NArg() != 1 {
+			return 2, errors.New("usage: kwangmyong hook commit-msg <message-file>")
+		}
+		r, err = hook.CommitMsg(env, fs.Arg(0))
 	case "pre-push":
 		r, err = hook.PrePush(env, root, stdin)
 	default:
-		return 2, fmt.Errorf("unknown hook %q", args[0])
+		if !slices.Contains(hook.Agents, args[0]) {
+			return 2, fmt.Errorf("unknown hook %q (want one of %s)", args[0], hookKinds)
+		}
+		blockCode = 2
+		r, err = hook.Agent(env, stdin)
 	}
 	if err != nil {
 		return 2, err
@@ -617,4 +633,44 @@ func cmdHook(args []string, stdin io.Reader, stderr io.Writer) (int, error) {
 		return blockCode, nil
 	}
 	return 0, nil
+}
+
+// installHooks writes git hooks that call kwangmyong into the hooks
+// directory git uses for root (core.hooksPath respected). Hooks that are not
+// kwangmyong's are left alone unless force.
+func installHooks(root string, force bool, stdout io.Writer) error {
+	out, err := exec.Command("git", "-C", root, "rev-parse", "--git-path", "hooks").Output()
+	if err != nil {
+		return errors.New("hook install needs a git repository")
+	}
+	dir := strings.TrimSpace(string(out)) // relative to root unless absolute
+	if !filepath.IsAbs(dir) {
+		dir = filepath.Join(root, dir)
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	const marker = "# installed by kwangmyong"
+	hooks := map[string]string{
+		"pre-commit": "kwangmyong hook pre-commit",
+		"commit-msg": `kwangmyong hook commit-msg "$1"`,
+		"pre-push":   "kwangmyong hook pre-push",
+	}
+	st := ui.For(stdout)
+	var lines []string
+	for _, name := range []string{"pre-commit", "commit-msg", "pre-push"} {
+		p := filepath.Join(dir, name)
+		if old, err := os.ReadFile(p); err == nil && !strings.Contains(string(old), marker) && !force {
+			lines = append(lines, st.Paint(ui.Yellow, "  ! "+name+" exists and is not ours: left alone (--force replaces it)"))
+			continue
+		}
+		body := "#!/bin/sh\n" + marker + "\nexec " + hooks[name] + "\n"
+		if err := os.WriteFile(p, []byte(body), 0o755); err != nil { //nolint:gosec // git hooks must be executable
+			return err
+		}
+		lines = append(lines, "  "+st.Paint(ui.Green, "✓ ")+name)
+	}
+	head := st.Paint(ui.Bold+ui.Green, "✓ GUARDS POSTED") + "  " + st.Paint(ui.Bold, "commits and pushes now pass kwangmyong first")
+	fmt.Fprint(stdout, report.Banner(st, "")+st.Box(ui.Green, append([]string{head}, append(lines, st.Paint(ui.Dim, "  in "+tilde(dir)))...)))
+	return nil
 }

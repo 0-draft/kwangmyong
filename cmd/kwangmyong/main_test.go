@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -61,5 +62,55 @@ func TestRepoConfigRejectsIdentity(t *testing.T) {
 func TestUnknownCommand(t *testing.T) {
 	if code, _ := runCLI(t, "nope"); code != 2 {
 		t.Errorf("got %d", code)
+	}
+}
+
+func TestHookInstall(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not installed")
+	}
+	dir := t.TempDir()
+	if out, err := exec.Command("git", "init", "-q", dir).CombinedOutput(); err != nil {
+		t.Fatalf("%v %s", err, out)
+	}
+	t.Chdir(dir)
+	foreign := filepath.Join(dir, ".git", "hooks", "pre-push")
+	if err := os.WriteFile(foreign, []byte("#!/bin/sh\necho mine\n"), 0o755); err != nil { //nolint:gosec // test hook
+		t.Fatal(err)
+	}
+	for i := 0; i < 2; i++ {
+		if code, out := runCLI(t, "hook", "install"); code != 0 {
+			t.Fatalf("install: %d %s", code, out)
+		}
+	}
+	for _, h := range []string{"pre-commit", "commit-msg"} {
+		b, err := os.ReadFile(filepath.Join(dir, ".git", "hooks", h))
+		if err != nil || !strings.Contains(string(b), "kwangmyong hook "+h) {
+			t.Errorf("%s not installed: %q %v", h, b, err)
+		}
+	}
+	if b, _ := os.ReadFile(foreign); !strings.Contains(string(b), "echo mine") {
+		t.Error("a foreign hook was replaced without --force")
+	}
+	if code, _ := runCLI(t, "hook", "install", "--force"); code != 0 {
+		t.Fatal("install --force failed")
+	}
+	if b, _ := os.ReadFile(foreign); !strings.Contains(string(b), "kwangmyong hook pre-push") {
+		t.Error("--force did not replace the hook")
+	}
+}
+
+func TestHookAgentsExitTwo(t *testing.T) {
+	cfg := filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(cfg, []byte("[identity]\nnames = [\"Taro Yamada\"]\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("KWANGMYONG_CONFIG", cfg)
+	for _, a := range []string{"codex", "gemini", "cursor", "copilot", "windsurf", "kiro", "devin"} {
+		var out, errb bytes.Buffer
+		code, _ := cmdHook([]string{a, "--no-auto"}, strings.NewReader(`{"cwd":".","command":"gh issue create --body 'Taro Yamada'","tool_name":"run_shell_command","tool_input":{"command":"gh issue create --body 'Taro Yamada'"}}`), &out, &errb)
+		if code != 2 || strings.Contains(errb.String(), "Taro") {
+			t.Errorf("%s: code %d, stderr %q", a, code, errb.String())
+		}
 	}
 }

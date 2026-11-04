@@ -14,3 +14,11 @@
   pass_filenames: false
   always_run: true
   stages: [pre-push]
+- id: kwangmyong-commit-msg
+  name: kwangmyong (identity leaks in the commit message)
+  description: Block commit messages that carry your identity or an agent session link.
+  entry: kwangmyong hook commit-msg
+  language: golang
+  pass_filenames: true
+  always_run: true
+  stages: [commit-msg]
