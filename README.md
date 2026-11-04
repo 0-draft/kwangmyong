@@ -6,9 +6,22 @@ Secret scanners look for credentials. This looks for you.
 
 A secret scanner matches things shaped like credentials, so `/Users/tyamada` in a README or `Taro Yamada` in a deleted file is not a finding for it (gitleaks 8.30.1 on the demo repository below: `no leaks found`). kwangmyong starts from who you are, expands it into the spellings it shows up in, and reads the places a scanner for keys has no reason to: commit and tag metadata, deleted blobs, file names, and GitHub issues, reviews and gists.
 
-![gitleaks finds nothing in a repo full of a made-up developer's home paths, hostname, name and a Claude Code session link; kwangmyong finds all six and its Claude Code hook blocks a gh pr create](docs/demo/demo.gif)
+![gitleaks finds nothing in a repo full of a made-up developer's home paths, hostname, name and a Claude Code session link; kwangmyong's interactive view walks all six, its Claude Code hook blocks a gh pr create, and a clean repo comes back TARGET DARK](docs/demo/demo.gif)
 
 The demo identity is made up. To re-record it: `vhs docs/demo/demo.tape`.
+
+## Next to a secret scanner
+
+Keep your secret scanner. It answers a different question.
+
+| | Secret scanners (gitleaks, TruffleHog, GitHub secret scanning) | kwangmyong |
+| --- | --- | --- |
+| Looks for | credentials: keys, tokens, passwords | you: your name in every spelling, logins, emails, hostnames, home paths, agent session links |
+| Knows who you are | no; a custom regex can match one spelling | a target profile, filled in from this machine and expanded (`Taro Yamada`, `tyamada`, `t.yamada`, `山田 太郎`, `-Users-tyamada-`) |
+| Commit author, committer, tagger | not findings | findings, counted per value |
+| A hit in history | rotate the secret and move on | a name cannot be rotated: `plan` drafts the rewrite and says what it cannot reach |
+| Output | the secret, or a redacted form | masked by default everywhere, including the hook messages an agent reads |
+| Where it runs | CLI, pre-commit, CI | CLI with an interactive view, git hooks, CI (Action, SARIF), and pre-tool hooks for eight coding agents |
 
 ## Install
 
