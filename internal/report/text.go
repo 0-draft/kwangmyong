@@ -517,6 +517,7 @@ func readLine(st *scan.Stats) string {
 	add(st.Commits, "commit", "commits")
 	add(st.Tags, "tag", "tags")
 	add(st.Blobs, "deleted blob", "deleted blobs")
+	add(st.Repos, "repository", "repositories")
 	return strings.Join(parts, " · ")
 }
 
