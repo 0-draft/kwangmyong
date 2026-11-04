@@ -46,8 +46,8 @@ changelog:
 homebrew_casks:
   - name: kwangmyong
     binaries: [kwangmyong]
-    # Without the tap token (forks, or before it is set) the release still ships.
-    skip_upload: '{{ if index .Env "HOMEBREW_TAP_GITHUB_TOKEN" }}auto{{ else }}true{{ end }}'
+    # A v1.2.3-rc1 tag is a prerelease; keep it out of the tap.
+    skip_upload: auto
     # Casks are downloaded with curl, so the binary carries com.apple.quarantine
     # and Gatekeeper refuses to run it unsigned.
     custom_block: |
@@ -62,7 +62,7 @@ homebrew_casks:
       owner: kanywst
       name: homebrew-tap
       branch: main
-      token: '{{ index .Env "HOMEBREW_TAP_GITHUB_TOKEN" }}'
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
     directory: Casks
     commit_author:
       name: goreleaserbot
