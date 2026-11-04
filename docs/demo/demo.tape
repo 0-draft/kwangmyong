@@ -1,12 +1,12 @@
 # Regenerate from the repository root: vhs docs/demo/demo.tape (needs gitleaks)
 Output docs/demo/demo.gif
 Set Shell bash
-Set FontSize 16
-Set Width 1300
-Set Height 1120
-Set Padding 24
+Set FontSize 15
+Set Width 1400
+Set Height 820
+Set Padding 20
 Set Theme "Dracula"
-Set TypingSpeed 25ms
+Set TypingSpeed 30ms
 
 # --no-auto keeps the recording machine's own identity out of the demo.
 Hide
@@ -20,11 +20,27 @@ Enter
 Type "gitleaks git . --no-banner 2>&1 | grep -o 'no leaks found'"
 Enter
 Sleep 2s
-Type "# no secrets. but what does it say about its author?"
+Type "# no secrets. but what does it give away about its author?"
 Enter
 Type "kwangmyong scan --history ."
 Enter
-Sleep 9s
+Sleep 3.5s
+Type "j"
+Sleep 1.2s
+Type "j"
+Sleep 1.5s
+Type "3"
+Sleep 2s
+Type "r"
+Sleep 2s
+Type "r"
+Sleep 600ms
+Type "p"
+Sleep 3s
+Type " "
+Sleep 600ms
+Type "q"
+Sleep 3s
 
 Hide
 Type "clear"
@@ -39,4 +55,4 @@ Type "# and a repo the author kept clean"
 Enter
 Type "kwangmyong scan --history ../clean"
 Enter
-Sleep 6s
+Sleep 5s
