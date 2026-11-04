@@ -75,9 +75,10 @@ type Options struct {
 	History     bool
 	MaxFileSize int64
 	AllowPaths  []string
-	Staged      bool     // only the staged diff and the pending identity
-	Pending     bool     // with Staged: unstaged and untracked changes too
-	Revs        []string // rev-list arguments for metadata and history; default --all
+	Staged      bool        // only the staged diff and the pending identity
+	Pending     bool        // with Staged: unstaged and untracked changes too
+	Revs        []string    // rev-list arguments for metadata and history; default --all
+	Progress    func(Stats) // called as files, commits and blobs are read
 }
 
 // TopLevel resolves the git repository containing root, if any.
@@ -88,7 +89,8 @@ type Stats struct {
 	Files   int `json:"files"`
 	Commits int `json:"commits"`
 	Tags    int `json:"tags"`
-	Blobs   int `json:"blobs"` // history blobs not in HEAD
+	Blobs   int `json:"blobs"`           // history blobs not in HEAD
+	Repos   int `json:"repos,omitempty"` // GitHub repositories, for github scans
 }
 
 // Run scans Root. Outside git, only files are scanned.
@@ -159,6 +161,12 @@ type scanner struct {
 	agg   map[string]*Finding
 	order []string
 	stats Stats
+}
+
+func (s *scanner) tick() {
+	if s.opt.Progress != nil {
+		s.opt.Progress(s.stats)
+	}
 }
 
 func (s *scanner) pathAllowed(p string) bool { return PathAllowed(s.opt.AllowPaths, p) }
@@ -270,6 +278,7 @@ func (s *scanner) file(rel, abs string) error {
 		return nil
 	}
 	s.stats.Files++
+	s.tick()
 	s.text(SurfaceFile, filepath.ToSlash(rel), data)
 	return nil
 }
@@ -342,6 +351,7 @@ func (s *scanner) commits(top string) error {
 		}
 		sha := parts[0]
 		s.stats.Commits++
+		s.tick()
 		for i, field := range []string{"author.name", "author.email", "committer.name", "committer.email", "message"} {
 			s.meta(SurfaceCommit, sha, field, parts[i+1])
 		}
@@ -415,6 +425,7 @@ func (s *scanner) history(top string) error {
 		return nil
 	}
 	s.stats.Blobs = len(blobs)
+	s.tick()
 	cmd := exec.Command("git", "-C", top, "cat-file", "--batch")
 	var in bytes.Buffer
 	for _, b := range blobs {
