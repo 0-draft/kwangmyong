@@ -76,6 +76,7 @@ values = ["^example$"]
 | --- | --- |
 | `identity.email`, `.name`, `.login`, `.host`, `.literal` | high |
 | `generic.autogen-email` (`user@Host.local`) | high |
+| `generic.agent-session-url` (Claude Code and Codex session links) | high |
 | `generic.home-path` (anyone's home path) | warn |
 | `github.unclaimed-handle` (a declared login free to register) | warn |
 
@@ -121,7 +122,7 @@ The Claude Code hook checks writes into a repository, `git commit`, `git push`, 
 ```yaml
 repos:
   - repo: https://github.com/0-draft/kwangmyong
-    rev: v0.1.0
+    rev: v0.1.2
     hooks:
       - id: kwangmyong
       - id: kwangmyong-pre-push
