@@ -162,7 +162,7 @@ kwangmyong hook install   # このリポジトリに pre-commit、commit-msg、p
 ```yaml
 repos:
   - repo: https://github.com/kanywst/kwangmyong
-    rev: v0.4.1
+    rev: v0
     hooks:
       - id: kwangmyong
       - id: kwangmyong-commit-msg
@@ -235,7 +235,7 @@ Cursor:
 - uses: actions/checkout@v7
   with:
     fetch-depth: 0 # --history には全 commit が要る
-- uses: kanywst/kwangmyong@v0.4.1
+- uses: kanywst/kwangmyong@v0
   with:
     identity: ${{ secrets.KWANGMYONG_IDENTITY }}
     sarif: kwangmyong.sarif
