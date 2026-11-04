@@ -30,6 +30,30 @@ type Finding struct {
 	Count    int    `json:"count"`
 	Redacted string `json:"value"`
 	Value    string `json:"-"`
+	// Context is the line the value sits on and Start/End its byte span in
+	// it. They hold raw text, so they are for rendering a masked frame only.
+	Context string `json:"-"`
+	Start   int    `json:"-"`
+	End     int    `json:"-"`
+}
+
+// At records where in text a match sits: the line around it and the span of
+// the reported value within that line.
+func (f Finding) At(text string, mt rules.Match) Finding {
+	ls := strings.LastIndexByte(text[:mt.Start], '\n') + 1
+	le := len(text)
+	if i := strings.IndexByte(text[mt.Start:], '\n'); i >= 0 {
+		le = mt.Start + i
+	}
+	start, end := mt.Start, mt.End
+	if end > le {
+		end = le
+	}
+	if i := strings.Index(text[start:end], mt.Value); i >= 0 {
+		start, end = start+i, start+i+len(mt.Value)
+	}
+	f.Context, f.Start, f.End = text[ls:le], start-ls, end-ls
+	return f
 }
 
 // Surfaces.
@@ -58,8 +82,30 @@ type Options struct {
 // TopLevel resolves the git repository containing root, if any.
 func TopLevel(root string) (top string, isGit, bare bool) { return gitTop(root) }
 
+// Stats counts what a scan read.
+type Stats struct {
+	Files   int `json:"files"`
+	Commits int `json:"commits"`
+	Tags    int `json:"tags"`
+	Blobs   int `json:"blobs"` // history blobs not in HEAD
+}
+
 // Run scans Root. Outside git, only files are scanned.
 func Run(m *rules.Matcher, opt Options) ([]Finding, error) {
+	fs, _, err := RunStats(m, opt)
+	return fs, err
+}
+
+// RunStats is Run that also reports what was read.
+func RunStats(m *rules.Matcher, opt Options) ([]Finding, Stats, error) {
+	fs, st, err := run(m, opt)
+	if err != nil {
+		return nil, Stats{}, err
+	}
+	return fs, st, nil
+}
+
+func run(m *rules.Matcher, opt Options) ([]Finding, Stats, error) {
 	if opt.MaxFileSize <= 0 {
 		opt.MaxFileSize = 5 << 20
 	}
@@ -68,12 +114,12 @@ func Run(m *rules.Matcher, opt Options) ([]Finding, error) {
 	s.bare = bare
 	if opt.Staged {
 		if !isGit || bare {
-			return nil, fmt.Errorf("--staged needs a git work tree")
+			return nil, s.stats, fmt.Errorf("--staged needs a git work tree")
 		}
 		if err := s.staged(top); err != nil {
-			return nil, err
+			return nil, s.stats, err
 		}
-		return s.result(), nil
+		return s.result(), s.stats, nil
 	}
 	if opt.Tree && !bare && len(opt.Revs) == 0 {
 		var err error
@@ -83,25 +129,25 @@ func Run(m *rules.Matcher, opt Options) ([]Finding, error) {
 			err = s.walkTree(opt.Root)
 		}
 		if err != nil {
-			return nil, err
+			return nil, s.stats, err
 		}
 	}
 	if isGit && opt.Meta {
 		if err := s.commits(top); err != nil {
-			return nil, err
+			return nil, s.stats, err
 		}
 		if len(opt.Revs) == 0 {
 			if err := s.tags(top); err != nil {
-				return nil, err
+				return nil, s.stats, err
 			}
 		}
 	}
 	if isGit && opt.History {
 		if err := s.history(top); err != nil {
-			return nil, err
+			return nil, s.stats, err
 		}
 	}
-	return s.result(), nil
+	return s.result(), s.stats, nil
 }
 
 type scanner struct {
@@ -111,6 +157,7 @@ type scanner struct {
 	out   []Finding
 	agg   map[string]*Finding
 	order []string
+	stats Stats
 }
 
 func (s *scanner) pathAllowed(p string) bool { return PathAllowed(s.opt.AllowPaths, p) }
@@ -186,7 +233,7 @@ func (s *scanner) text(surface, location string, data []byte) {
 			l, data = data[:i], data[i+1:]
 		}
 		for _, mt := range s.m.Find(string(l)) {
-			f := Finding{RuleID: mt.RuleID, Severity: mt.Severity.String(), Surface: surface, Location: location, Line: line, Value: mt.Value}
+			f := Finding{RuleID: mt.RuleID, Severity: mt.Severity.String(), Surface: surface, Location: location, Line: line, Value: mt.Value}.At(string(l), mt)
 			if surface == SurfaceHistory {
 				s.aggregate(strings.Join([]string{surface, location, mt.RuleID, strings.ToLower(mt.Value)}, "\x00"), f)
 			} else {
@@ -202,7 +249,7 @@ func (s *scanner) file(rel, abs string) error {
 		return nil
 	}
 	for _, mt := range s.m.Find(filepath.ToSlash(rel)) {
-		s.add(Finding{RuleID: mt.RuleID, Severity: mt.Severity.String(), Surface: SurfacePath, Location: filepath.ToSlash(rel), Value: mt.Value})
+		s.add(Finding{RuleID: mt.RuleID, Severity: mt.Severity.String(), Surface: SurfacePath, Location: filepath.ToSlash(rel), Value: mt.Value}.At(filepath.ToSlash(rel), mt))
 	}
 	fi, err := os.Lstat(abs)
 	if err != nil {
@@ -221,6 +268,7 @@ func (s *scanner) file(rel, abs string) error {
 	if isBinary(data) {
 		return nil
 	}
+	s.stats.Files++
 	s.text(SurfaceFile, filepath.ToSlash(rel), data)
 	return nil
 }
@@ -292,6 +340,7 @@ func (s *scanner) commits(top string) error {
 			continue
 		}
 		sha := parts[0]
+		s.stats.Commits++
 		for i, field := range []string{"author.name", "author.email", "committer.name", "committer.email", "message"} {
 			s.meta(SurfaceCommit, sha, field, parts[i+1])
 		}
@@ -312,6 +361,7 @@ func (s *scanner) tags(top string) error {
 		if len(parts) < 4 {
 			continue
 		}
+		s.stats.Tags++
 		for i, field := range []string{"tagger.name", "tagger.email", "message"} {
 			s.meta(SurfaceTag, parts[0], field, parts[i+1])
 		}
@@ -326,7 +376,7 @@ func (s *scanner) meta(surface, ref, field, text string) {
 		if surface == SurfaceCommit && len(loc) > 7 {
 			loc = loc[:7]
 		}
-		s.aggregate(key, Finding{RuleID: mt.RuleID, Severity: mt.Severity.String(), Surface: surface, Location: loc, Field: field, Value: mt.Value})
+		s.aggregate(key, Finding{RuleID: mt.RuleID, Severity: mt.Severity.String(), Surface: surface, Location: loc, Field: field, Value: mt.Value}.At(text, mt))
 	}
 }
 
@@ -363,6 +413,7 @@ func (s *scanner) history(top string) error {
 	if len(blobs) == 0 {
 		return nil
 	}
+	s.stats.Blobs = len(blobs)
 	cmd := exec.Command("git", "-C", top, "cat-file", "--batch")
 	var in bytes.Buffer
 	for _, b := range blobs {
@@ -450,7 +501,7 @@ func (s *scanner) diff(out string) {
 			file = strings.TrimPrefix(l, "+++ ")
 			if file != "/dev/null" && !s.pathAllowed(file) {
 				for _, mt := range s.m.Find(file) {
-					s.add(Finding{RuleID: mt.RuleID, Severity: mt.Severity.String(), Surface: SurfacePath, Location: file, Value: mt.Value})
+					s.add(Finding{RuleID: mt.RuleID, Severity: mt.Severity.String(), Surface: SurfacePath, Location: file, Value: mt.Value}.At(file, mt))
 				}
 			}
 		case strings.HasPrefix(l, "@@ "):
@@ -463,7 +514,7 @@ func (s *scanner) diff(out string) {
 		case strings.HasPrefix(l, "+"):
 			if file != "" && file != "/dev/null" && !s.pathAllowed(file) {
 				for _, mt := range s.m.Find(l[1:]) {
-					s.add(Finding{RuleID: mt.RuleID, Severity: mt.Severity.String(), Surface: SurfaceStaged, Location: file, Line: line, Value: mt.Value})
+					s.add(Finding{RuleID: mt.RuleID, Severity: mt.Severity.String(), Surface: SurfaceStaged, Location: file, Line: line, Value: mt.Value}.At(l[1:], mt))
 				}
 			}
 			line++
