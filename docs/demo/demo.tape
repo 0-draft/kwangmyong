@@ -1,37 +1,42 @@
 # Regenerate from the repository root: vhs docs/demo/demo.tape (needs gitleaks)
 Output docs/demo/demo.gif
 Set Shell bash
-Set FontSize 17
-Set Width 1780
-Set Height 740
+Set FontSize 16
+Set Width 1300
+Set Height 1120
 Set Padding 24
 Set Theme "Dracula"
-Set TypingSpeed 35ms
+Set TypingSpeed 25ms
+
+# --no-auto keeps the recording machine's own identity out of the demo.
 Hide
-Type `export D=$(mktemp -d) && go build -o $D/kwangmyong ./cmd/kwangmyong && docs/demo/setup.sh $D >/dev/null && export PATH=$D:$PATH KWANGMYONG_CONFIG=$D/config.toml PS1='$ ' && cd $D/repo && clear`
+Type `export D=$(mktemp -d) && go build -o $D/kwangmyong ./cmd/kwangmyong && docs/demo/setup.sh $D >/dev/null && export PATH=$D:$PATH KWANGMYONG_CONFIG=$D/config.toml PS1='\[\e[2m\]$\[\e[0m\] ' && kwangmyong() { if [ "$1" = hook ]; then command kwangmyong hook "$2" --no-auto "${@:3}"; else command kwangmyong "$1" --no-auto "${@:2}"; fi; } && cd $D/repo && clear`
 Enter
 Sleep 10s
 Show
-Type "# A repo an agent has been committing to"
-Enter
-Type "cat README.md NOTES.md test.log"
-Enter
-Sleep 2.5s
-Enter
-Type "# A secret scanner has nothing to say"
+
+Type "# a repo a coding agent has been working in. any secrets?"
 Enter
 Type "gitleaks git . --no-banner 2>&1 | grep -o 'no leaks found'"
 Enter
-Sleep 2.5s
+Sleep 2s
+Type "# no secrets. but what does it say about its author?"
 Enter
-Type "# kwangmyong looks for you (--reveal: these are made-up values)"
+Type "kwangmyong scan --history ."
 Enter
-Type "kwangmyong scan --no-auto --history --reveal ."
+Sleep 9s
+
+Hide
+Type "clear"
+Enter
+Show
+Type "# the agent opens a PR with its session link in the body"
+Enter
+Type "kwangmyong hook claude < ../pr-create.json; echo exit=$?"
 Enter
 Sleep 4s
+Type "# and a repo the author kept clean"
 Enter
-Type "# As a Claude Code hook, it stops the agent's gh pr create"
+Type "kwangmyong scan --history ../clean"
 Enter
-Type "kwangmyong hook claude --no-auto < ../pr-create.json; echo exit=$?"
-Enter
-Sleep 5s
+Sleep 6s

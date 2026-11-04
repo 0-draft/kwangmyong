@@ -4,6 +4,8 @@ Finds your own identity in git repositories: real name, login, personal email, h
 
 Secret scanners look for credentials. This looks for you.
 
+A secret scanner matches things shaped like credentials, so `/Users/tyamada` in a README or `Taro Yamada` in a deleted file is not a finding for it (gitleaks 8.30.1 on the demo repository below: `no leaks found`). kwangmyong starts from who you are, expands it into the spellings it shows up in, and reads the places a scanner for keys has no reason to: commit and tag metadata, deleted blobs, file names, and GitHub issues, reviews and gists.
+
 ![gitleaks finds nothing in a repo full of a made-up developer's home paths, hostname, name and a Claude Code session link; kwangmyong finds all six and its Claude Code hook blocks a gh pr create](docs/demo/demo.gif)
 
 The demo identity is made up. To re-record it: `vhs docs/demo/demo.tape`.
@@ -40,7 +42,13 @@ kwangmyong plan .                # git filter-repo inputs and a rewrite checklis
 
 Exit status: `0` clean, `1` leaks, `2` error.
 
-Matched values are never printed, only a prefix and a fingerprint (`ta…[27fc08b6]`). `--reveal` prints them; `--format json` is available.
+The text report has three parts:
+
+- each place you were found: the line, with the value masked to a prefix and a fingerprint (`ta…[27fc08b6]`) and underlined with what it gives away
+- an intel report: each kind of information about you, how often and where
+- a verdict: `TARGET EXPOSED` with a threat level, how many finds need only a file edit and how many are baked into history, and the next command; or `TARGET DARK` with what was swept and searched for
+
+`--reveal` prints raw values; `--format json` is for machines. Color is on in a terminal and off when piped or with `NO_COLOR`.
 
 ## Identity
 

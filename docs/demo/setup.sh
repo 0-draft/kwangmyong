@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Builds the demo repository for a made-up developer in $1.
+# Builds the demo repositories for a made-up developer in $1.
+# shellcheck disable=SC2016 # backticks in the README text are literal Markdown
 set -euo pipefail
 mkdir -p "$1/repo" && cd "$1/repo"
 git init -q -b main
-# shellcheck disable=SC2016 # the backticks are literal Markdown
 printf '# app\n\nBuild with `make`. Logs go to /Users/tyamada/src/app/log.\n' > README.md
 git add . && git commit -q -m init
 printf 'Agent memory lives in ~/.claude/projects/-Users-tyamada-src-app/memory.\n' > NOTES.md
@@ -21,3 +21,7 @@ TOML
 cat > "$1/pr-create.json" <<JSON
 {"tool_name":"Bash","cwd":"$1/repo","tool_input":{"command":"gh pr create --title 'Add notes' --body 'Adds notes.\\n\\nhttps://claude.ai/code/session_01AbCdEfGh'"}}
 JSON
+# A repository with nothing of Taro in it.
+mkdir -p "$1/clean" && cd "$1/clean" && git init -q -b main
+printf '# app\n\nBuild with `make`. Logs go to ~/src/app/log.\n' > README.md
+git add . && git commit -q -m init
