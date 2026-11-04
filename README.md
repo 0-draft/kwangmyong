@@ -276,4 +276,4 @@ Releases before v0.4.0 were published from `0-draft/kwangmyong`, which the regex
 
 ## License
 
-MIT
+Apache-2.0

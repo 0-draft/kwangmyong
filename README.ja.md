@@ -276,4 +276,4 @@ v0.4.0 より前の release は `0-draft/kwangmyong` から出ていたので、
 
 ## ライセンス
 
-MIT
+Apache-2.0
