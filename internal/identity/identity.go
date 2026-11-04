@@ -66,6 +66,38 @@ func LoadFile(path string) (Config, toml.MetaData, error) {
 	return c, md, nil
 }
 
+// EnvIdentity is the variable that carries a config in TOML, for CI where
+// the identity lives in a secret rather than a file.
+const EnvIdentity = "KWANGMYONG_IDENTITY"
+
+// LoadEnv parses $KWANGMYONG_IDENTITY: a full config, or just the keys of the
+// [identity] table. Unset is not an error.
+func LoadEnv() (Config, error) {
+	v := os.Getenv(EnvIdentity)
+	if strings.TrimSpace(v) == "" {
+		return Config{}, nil
+	}
+	var c Config
+	md, err := toml.Decode(v, &c)
+	if err == nil && !md.IsDefined("identity") && !md.IsDefined("allow") {
+		_, err = toml.Decode(v, &c.Identity)
+	}
+	if err != nil {
+		return Config{}, envError(err)
+	}
+	return c, nil
+}
+
+// envError says where the TOML broke without quoting it: CI logs are public
+// and the text is the identity.
+func envError(err error) error {
+	var pe toml.ParseError
+	if errors.As(err, &pe) {
+		return fmt.Errorf("$%s is not valid TOML (line %d)", EnvIdentity, pe.Position.Line)
+	}
+	return fmt.Errorf("$%s is not a valid config", EnvIdentity)
+}
+
 // LoadRepo reads <root>/.kwangmyong.toml and rejects an [identity] table.
 func LoadRepo(root string) (Allow, error) {
 	c, md, err := LoadFile(filepath.Join(root, RepoConfigName))

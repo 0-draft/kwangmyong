@@ -206,7 +206,13 @@ func (c *common) load() (identity.Identity, identity.Allow, error) {
 	if err != nil {
 		return identity.Identity{}, identity.Allow{}, err
 	}
-	id := cfg.Identity
+	env, err := identity.LoadEnv()
+	if err != nil {
+		return identity.Identity{}, identity.Allow{}, err
+	}
+	id := identity.Merge(cfg.Identity, env.Identity)
+	cfg.Allow.Paths = append(cfg.Allow.Paths, env.Allow.Paths...)
+	cfg.Allow.Values = append(cfg.Allow.Values, env.Allow.Values...)
 	if !c.noAuto {
 		id = identity.Merge(id, identity.Detect())
 	}

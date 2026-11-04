@@ -85,3 +85,20 @@ func TestNormalize(t *testing.T) {
 		t.Errorf("hosts = %v", id.Hosts)
 	}
 }
+
+func TestLoadEnv(t *testing.T) {
+	t.Setenv(EnvIdentity, "names = [\"Taro Yamada\"]\nhosts = [\"Taros-MacBook-Pro\"]")
+	c, err := LoadEnv()
+	if err != nil || len(c.Identity.Names) != 1 || len(c.Identity.Hosts) != 1 {
+		t.Fatalf("bare keys: %+v %v", c, err)
+	}
+	t.Setenv(EnvIdentity, "[identity]\nlogins = [\"tyamada\"]\n[allow]\npaths = [\"testdata/**\"]")
+	c, err = LoadEnv()
+	if err != nil || len(c.Identity.Logins) != 1 || len(c.Allow.Paths) != 1 {
+		t.Fatalf("full config: %+v %v", c, err)
+	}
+	t.Setenv(EnvIdentity, "names = [\"Taro Yamada\" \"x\"]")
+	if _, err := LoadEnv(); err == nil || strings.Contains(err.Error(), "Taro") || strings.Contains(err.Error(), "names") {
+		t.Fatalf("bad TOML should fail without echoing values: %v", err)
+	}
+}
