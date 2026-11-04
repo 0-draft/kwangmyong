@@ -4,6 +4,10 @@ Finds your own identity in git repositories: real name, login, personal email, h
 
 Secret scanners look for credentials. This looks for you.
 
+![gitleaks finds nothing in a repo full of a made-up developer's home paths, hostname, name and a Claude Code session link; kwangmyong finds all six and its Claude Code hook blocks a gh pr create](docs/demo/demo.gif)
+
+The demo identity is made up. To re-record it: `vhs docs/demo/demo.tape`.
+
 ## Install
 
 ```sh

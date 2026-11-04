@@ -1,4 +1,4 @@
 # Repo-level config: [allow] only. Identity belongs in the user config.
 [allow]
-# Test fixtures use a fictional identity and fictional home paths on purpose.
-paths = ["**/*_test.go"]
+# Test fixtures and the demo use a fictional identity and fictional home paths on purpose.
+paths = ["**/*_test.go", "docs/demo/**"]
