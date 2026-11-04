@@ -22,6 +22,7 @@ import (
 	"github.com/0-draft/kwangmyong/internal/report"
 	"github.com/0-draft/kwangmyong/internal/rules"
 	"github.com/0-draft/kwangmyong/internal/scan"
+	"github.com/0-draft/kwangmyong/internal/tui"
 	"github.com/0-draft/kwangmyong/internal/ui"
 )
 
@@ -234,6 +235,7 @@ func cmdScan(args []string, stdout, stderr io.Writer) (int, error) {
 	strict := fs.Bool("strict", false, "fail on warn findings too")
 	maxSize := fs.Int64("max-file-size", 5<<20, "skip files larger than this many bytes")
 	staged := fs.Bool("staged", false, "scan only what the next commit adds (staged diff and pending identity)")
+	noTUI := fs.Bool("no-tui", false, "print the report instead of opening the interactive view")
 	if err := fs.Parse(args); err != nil {
 		return 2, err
 	}
@@ -249,7 +251,7 @@ func cmdScan(args []string, stdout, stderr io.Writer) (int, error) {
 	if err != nil {
 		return 2, err
 	}
-	findings, stats, err := scan.RunStats(m, scan.Options{
+	opt := scan.Options{
 		Root:        root,
 		Tree:        !*noTree,
 		Meta:        !*noMeta,
@@ -257,15 +259,72 @@ func cmdScan(args []string, stdout, stderr io.Writer) (int, error) {
 		MaxFileSize: *maxSize,
 		AllowPaths:  allowPaths,
 		Staged:      *staged,
-	})
-	if err != nil {
-		return 2, err
 	}
 	target := root
 	if *staged {
 		target = "the next commit"
 	}
-	return finish(stdout, *format, c.style(stdout, *reveal), *strict, findings, report.Meta{Target: tilde(target), Stats: &stats, Looked: looked(id)})
+	meta := report.Meta{Target: tilde(target), Looked: looked(id)}
+	if *format == "text" && interactive(stdout, *noTUI) {
+		top, isGit, _ := scan.TopLevel(root)
+		if !isGit {
+			top = root
+		}
+		var planFn func() ([]string, error)
+		if !*staged {
+			planFn = func() ([]string, error) {
+				lines, _, err := draftPlan(&c, root, "", "", ui.Style{Color: true}, io.Discard)
+				return lines, err
+			}
+		}
+		res, err := tui.Run(os.Stdin, stdout, tui.Options{
+			Target: meta.Target, Looked: meta.Looked, Reveal: *reveal, Root: top, Plan: planFn,
+			Sweep: func(progress func(scan.Stats)) ([]scan.Finding, scan.Stats, error) {
+				o := opt
+				o.Progress = progress
+				return scan.RunStats(m, o)
+			},
+		})
+		if err != nil {
+			return 2, err
+		}
+		meta.Stats = &res.Stats
+		return after(stdout, c.style(stdout, false), *strict, res, meta)
+	}
+	findings, stats, err := scan.RunStats(m, opt)
+	if err != nil {
+		return 2, err
+	}
+	meta.Stats = &stats
+	return finish(stdout, *format, c.style(stdout, *reveal), *strict, findings, meta)
+}
+
+// interactive says whether to open the TUI: a terminal on both ends, not CI,
+// not turned off.
+func interactive(stdout io.Writer, off bool) bool {
+	if off || os.Getenv("KWANGMYONG_NO_TUI") != "" || os.Getenv("CI") != "" {
+		return false
+	}
+	isTTY := func(f *os.File) bool {
+		fi, err := f.Stat()
+		return err == nil && fi.Mode()&os.ModeCharDevice != 0
+	}
+	out, ok := stdout.(*os.File)
+	return ok && isTTY(out) && isTTY(os.Stdin) && ui.For(stdout).Color
+}
+
+// after prints what stays in the scrollback once the TUI closes: the full
+// report when there was nothing to browse, else the verdict.
+func after(stdout io.Writer, st report.Style, strict bool, res tui.Result, meta report.Meta) (int, error) {
+	if !res.Browsed {
+		return finish(stdout, "text", st, strict, res.Findings, meta)
+	}
+	fmt.Fprint(stdout, report.Banner(st.Style, st.Masker(res.Findings).Scrub(meta.Target))+st.Verdict(res.Findings, meta))
+	sum := report.Summarize(res.Findings)
+	if sum.High > 0 || (strict && sum.Warn > 0) {
+		return 1, nil
+	}
+	return 0, nil
 }
 
 func cmdInit(stdout io.Writer) error {
@@ -434,6 +493,7 @@ func cmdGitHub(args []string, stdout, stderr io.Writer) (int, error) {
 	format := fs.String("format", "text", "output format: text, json or sarif (sarif is always masked)")
 	reveal := fs.Bool("reveal", false, "print raw matched values (local terminal only)")
 	strict := fs.Bool("strict", false, "fail on warn findings too")
+	noTUI := fs.Bool("no-tui", false, "print the report instead of opening the interactive view")
 	if err := fs.Parse(args); err != nil {
 		return 2, err
 	}
@@ -453,6 +513,26 @@ func cmdGitHub(args []string, stdout, stderr io.Writer) (int, error) {
 		return 2, err
 	}
 	s := &github.Scanner{C: client, M: m}
+	gopt := github.Options{
+		Owner: owner, Repo: repo, IncludeForks: *forks, IncludeArchived: *archived,
+		Reviews: *reviews, Gists: *gists, Handles: id.Logins,
+	}
+	meta := report.Meta{Target: "github.com/" + fs.Arg(0), Looked: looked(id)}
+	if *format == "text" && interactive(stdout, *noTUI) {
+		res, err := tui.Run(os.Stdin, stdout, tui.Options{
+			Target: meta.Target, Looked: meta.Looked, Reveal: *reveal,
+			Sweep: func(progress func(scan.Stats)) ([]scan.Finding, scan.Stats, error) {
+				o := gopt
+				o.Progress = func(done, _ int) { progress(scan.Stats{Repos: done}) }
+				fs, err := s.Run(context.Background(), o)
+				return fs, scan.Stats{}, err
+			},
+		})
+		if err != nil {
+			return 2, err
+		}
+		return after(stdout, c.style(stdout, false), *strict, res, meta)
+	}
 	var progress func(done, total int)
 	if st := ui.For(stderr); st.Color {
 		var mu sync.Mutex
@@ -467,17 +547,15 @@ func cmdGitHub(args []string, stdout, stderr io.Writer) (int, error) {
 			fmt.Fprintf(stderr, "\r\x1b[K%s sweeping github.com/%s  %d/%d %s", st.Paint(ui.Red, "★"), fs.Arg(0), done, total, ui.Plural(total, "repo", "repos"))
 		}
 	}
-	findings, err := s.Run(context.Background(), github.Options{
-		Owner: owner, Repo: repo, IncludeForks: *forks, IncludeArchived: *archived,
-		Reviews: *reviews, Gists: *gists, Handles: id.Logins, Progress: progress,
-	})
+	gopt.Progress = progress
+	findings, err := s.Run(context.Background(), gopt)
 	if progress != nil {
 		fmt.Fprint(stderr, "\r\x1b[K")
 	}
 	if err != nil {
 		return 2, err
 	}
-	return finish(stdout, *format, c.style(stdout, *reveal), *strict, findings, report.Meta{Target: "github.com/" + fs.Arg(0), Looked: looked(id)})
+	return finish(stdout, *format, c.style(stdout, *reveal), *strict, findings, meta)
 }
 
 func cmdPlan(args []string, stdout, stderr io.Writer) error {
@@ -495,32 +573,42 @@ func cmdPlan(args []string, stdout, stderr io.Writer) error {
 	if fs.NArg() > 0 {
 		root = fs.Arg(0)
 	}
-	target, err := resolveTarget(root, *to)
+	st := ui.For(stdout)
+	lines, color, err := draftPlan(&c, root, *to, *out, st, stderr)
 	if err != nil {
 		return err
+	}
+	fmt.Fprint(stdout, report.Banner(st, "")+st.Box(color, lines))
+	return nil
+}
+
+// draftPlan writes a rewrite plan for root and describes it.
+func draftPlan(c *common, root, to, out string, st ui.Style, stderr io.Writer) ([]string, string, error) {
+	target, err := resolveTarget(root, to)
+	if err != nil {
+		return nil, "", err
 	}
 	m, _, allowPaths, err := c.matcher(root, stderr)
 	if err != nil {
-		return err
+		return nil, "", err
 	}
 	findings, err := scan.Run(m, scan.Options{Root: root, Tree: true, Meta: true, History: true, AllowPaths: allowPaths})
 	if err != nil {
-		return err
+		return nil, "", err
 	}
 	p, err := plan.Build(root, m, findings, target)
 	if err != nil {
-		return err
+		return nil, "", err
 	}
-	dir := *out
+	dir := out
 	if dir == "" {
 		if dir, err = os.MkdirTemp("", "kwangmyong-plan-"); err != nil {
-			return err
+			return nil, "", err
 		}
 	}
 	if err := p.Write(dir); err != nil {
-		return err
+		return nil, "", err
 	}
-	st := ui.For(stdout)
 	lines := []string{}
 	if p.FirstChanged == "" {
 		lines = append(lines,
@@ -541,8 +629,7 @@ func cmdPlan(args []string, stdout, stderr io.Writer) error {
 	if p.FirstChanged == "" {
 		color = ui.Green
 	}
-	fmt.Fprint(stdout, report.Banner(st, "")+st.Box(color, lines))
-	return nil
+	return lines, color, nil
 }
 
 func planCounts(p *plan.Plan) string {
