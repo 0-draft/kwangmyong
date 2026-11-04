@@ -113,7 +113,7 @@ The Claude Code hook checks writes into a repository, `git commit`, `git push`, 
 ```yaml
 repos:
   - repo: https://github.com/0-draft/kwangmyong
-    rev: v0.1.0
+    rev: v0.1.2
     hooks:
       - id: kwangmyong
       - id: kwangmyong-pre-push
