@@ -44,6 +44,11 @@ type Match struct {
 	Value    string
 	Start    int
 	End      int
+	// MaskStart and MaskEnd cover the reported value plus any lower-priority
+	// value this match pushed out by overlapping it: everything a renderer
+	// must hide when it shows the surrounding text.
+	MaskStart int
+	MaskEnd   int
 }
 
 // Matcher runs rules in priority order.
@@ -126,22 +131,37 @@ func (m *Matcher) Find(s string) []Match {
 	var kept []Match
 	for _, r := range m.rules {
 		for _, loc := range r.re.FindAllStringSubmatchIndex(s, -1) {
-			value := s[loc[0]:loc[1]]
-			group := value
-			for g := 1; g*2 < len(loc); g++ {
-				if loc[g*2] >= 0 {
-					group = s[loc[g*2]:loc[g*2+1]]
-					break
+			vs, ve := loc[0], loc[1]
+			if !r.whole {
+				for g := 1; g*2 < len(loc); g++ {
+					if loc[g*2] >= 0 {
+						vs, ve = loc[g*2], loc[g*2+1]
+						break
+					}
 				}
 			}
-			if !r.whole {
-				value = group
+			value, group := s[vs:ve], s[vs:ve]
+			if r.whole {
+				for g := 1; g*2 < len(loc); g++ {
+					if loc[g*2] >= 0 {
+						group = s[loc[g*2]:loc[g*2+1]]
+						break
+					}
+				}
 			}
 			if (r.skip != nil && r.skip(group)) || m.allowed(value) {
 				continue
 			}
-			mt := Match{RuleID: r.ID, Severity: r.Severity, Value: value, Start: loc[0], End: loc[1]}
-			if !overlaps(kept, mt) {
+			mt := Match{RuleID: r.ID, Severity: r.Severity, Value: value, Start: loc[0], End: loc[1], MaskStart: vs, MaskEnd: ve}
+			hit := false
+			for i := range kept {
+				if mt.Start < kept[i].End && kept[i].Start < mt.End {
+					hit = true
+					kept[i].MaskStart = min(kept[i].MaskStart, vs)
+					kept[i].MaskEnd = max(kept[i].MaskEnd, ve)
+				}
+			}
+			if !hit {
 				kept = append(kept, mt)
 			}
 		}
@@ -153,15 +173,6 @@ func (m *Matcher) Find(s string) []Match {
 func (m *Matcher) allowed(v string) bool {
 	for _, re := range m.allow {
 		if re.MatchString(v) {
-			return true
-		}
-	}
-	return false
-}
-
-func overlaps(kept []Match, m Match) bool {
-	for _, k := range kept {
-		if m.Start < k.End && k.Start < m.End {
 			return true
 		}
 	}

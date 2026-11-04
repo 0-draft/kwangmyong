@@ -22,7 +22,8 @@ type Result struct {
 	Block    bool
 	What     string // what was stopped, "this commit"
 	Reason   string
-	Findings []scan.Finding
+	Findings []scan.Finding // the high ones, which block
+	All      []scan.Finding // everything found, so the message can mask it all
 }
 
 // Env is the matcher and allowlist a hook runs with.
@@ -41,14 +42,14 @@ func high(fs []scan.Finding) []scan.Finding {
 	return out
 }
 
-func decide(what string, fs []scan.Finding) Result {
-	fs = high(fs)
+func decide(what string, all []scan.Finding) Result {
+	fs := high(all)
 	if len(fs) == 0 {
 		return Result{}
 	}
 	var b strings.Builder
-	_ = report.Blocked(&b, what, fs, report.Style{})
-	return Result{Block: true, What: what, Reason: b.String(), Findings: fs}
+	_ = report.Blocked(&b, what, fs, all, report.Style{})
+	return Result{Block: true, What: what, Reason: b.String(), Findings: fs, All: all}
 }
 
 // PreCommit checks the staged diff and the pending identity. pending adds
