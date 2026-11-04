@@ -37,22 +37,23 @@ type Finding struct {
 	End     int    `json:"-"`
 }
 
-// At records where in text a match sits: the line around it and the span of
-// the reported value within that line.
+// At records where in text a match sits: the line around it, and the span a
+// renderer must mask in that line (the value plus anything it overlapped).
 func (f Finding) At(text string, mt rules.Match) Finding {
-	ls := strings.LastIndexByte(text[:mt.Start], '\n') + 1
+	ms, me := mt.MaskStart, mt.MaskEnd
+	if me <= ms { // a Match built by hand
+		ms, me = mt.Start, mt.End
+	}
+	ls := strings.LastIndexByte(text[:ms], '\n') + 1
 	le := len(text)
-	if i := strings.IndexByte(text[mt.Start:], '\n'); i >= 0 {
-		le = mt.Start + i
+	if i := strings.IndexByte(text[ms:], '\n'); i >= 0 {
+		le = ms + i
 	}
-	start, end := mt.Start, mt.End
-	if end > le {
-		end = le
+	if le > ls && text[le-1] == '\r' {
+		le--
 	}
-	if i := strings.Index(text[start:end], mt.Value); i >= 0 {
-		start, end = start+i, start+i+len(mt.Value)
-	}
-	f.Context, f.Start, f.End = text[ls:le], start-ls, end-ls
+	me = min(me, le)
+	f.Context, f.Start, f.End = text[ls:le], ms-ls, me-ls
 	return f
 }
 

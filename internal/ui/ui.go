@@ -105,10 +105,22 @@ func Width(t string) int {
 	return n
 }
 
-// RuneWidth is 2 for East Asian wide runes and wide emoji, else 1.
+// RuneWidth is the column width of r: 0 for combining marks, variation
+// selectors and zero-width characters, 2 for East Asian wide runes and
+// emoji, else 1.
 func RuneWidth(r rune) int {
 	switch {
+	case r >= 0x0300 && r <= 0x036f, r >= 0x200b && r <= 0x200f, r >= 0xfe00 && r <= 0xfe0f,
+		r >= 0x20d0 && r <= 0x20ff, r == 0x2060, r == 0xfeff:
+		return 0
 	case r >= 0x1100 && r <= 0x115f,
+		r >= 0x231a && r <= 0x231b, r >= 0x23e9 && r <= 0x23ec, r == 0x23f0, r == 0x23f3,
+		r >= 0x25fd && r <= 0x25fe, r >= 0x2614 && r <= 0x2615, r >= 0x2648 && r <= 0x2653,
+		r == 0x267f, r == 0x2693, r == 0x26a1, r >= 0x26aa && r <= 0x26ab, r >= 0x26bd && r <= 0x26be,
+		r >= 0x26c4 && r <= 0x26c5, r == 0x26ce, r == 0x26d4, r == 0x26ea, r >= 0x26f2 && r <= 0x26f3,
+		r == 0x26f5, r == 0x26fa, r == 0x26fd, r == 0x2705, r >= 0x270a && r <= 0x270b, r == 0x2728,
+		r == 0x274c, r == 0x274e, r >= 0x2753 && r <= 0x2755, r == 0x2757, r >= 0x2795 && r <= 0x2797,
+		r == 0x27b0, r == 0x27bf, r >= 0x2b1b && r <= 0x2b1c, r == 0x2b50, r == 0x2b55,
 		r >= 0x2e80 && r <= 0xa4cf && r != 0x303f,
 		r >= 0xac00 && r <= 0xd7a3,
 		r >= 0xf900 && r <= 0xfaff,
@@ -116,7 +128,8 @@ func RuneWidth(r rune) int {
 		r >= 0xff00 && r <= 0xff60,
 		r >= 0xffe0 && r <= 0xffe6,
 		r >= 0x1f300 && r <= 0x1f64f,
-		r >= 0x1f900 && r <= 0x1f9ff,
+		r >= 0x1f680 && r <= 0x1f6ff,
+		r >= 0x1f900 && r <= 0x1faff,
 		r >= 0x20000 && r <= 0x3fffd:
 		return 2
 	}

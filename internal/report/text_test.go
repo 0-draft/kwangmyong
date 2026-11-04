@@ -123,7 +123,8 @@ func TestTextTrimsLongLines(t *testing.T) {
 
 func TestBlocked(t *testing.T) {
 	var b strings.Builder
-	if err := Blocked(&b, "this commit", findings(t, scan.SurfaceStaged, "notes.md", "Taro Yamada"), Style{}); err != nil {
+	fs := findings(t, scan.SurfaceStaged, "notes.md", "Taro Yamada")
+	if err := Blocked(&b, "this commit", fs, fs, Style{}); err != nil {
 		t.Fatal(err)
 	}
 	out := b.String()
@@ -150,5 +151,115 @@ func TestTextMasksValuesCountedElsewhere(t *testing.T) {
 	out := render(t, []scan.Finding{name, host}, nil, Style{})
 	if strings.Contains(out, "Taros-MacBook") || strings.Contains(out, "Taro Yamada") {
 		t.Errorf("value from another group printed raw:\n%s", out)
+	}
+}
+
+// Regression tests for review findings on the redesigned output.
+
+func matchAll(t *testing.T, id identity.Identity, surface, location, text string) []scan.Finding {
+	t.Helper()
+	m, err := rules.New(identity.Expand(id), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out []scan.Finding
+	for _, mt := range m.Find(text) {
+		out = append(out, scan.Finding{RuleID: mt.RuleID, Severity: mt.Severity.String(), Surface: surface, Location: location, Line: 1, Count: 1, Value: mt.Value, Redacted: rules.Redact(mt.Value)}.At(text, mt))
+	}
+	return out
+}
+
+func TestOverlappedValuesStayMasked(t *testing.T) {
+	cases := []struct {
+		id   identity.Identity
+		line string
+		raw  []string
+	}{
+		{identity.Identity{Logins: []string{"tyamada"}}, "contact: tyamada@old-thinkpad.local", []string{"old-thinkpad"}},
+		{identity.Identity{Logins: []string{"tyamada"}, Literals: []string{"tyamada-acme-payroll-vpn"}}, "host: tyamada-acme-payroll-vpn", []string{"acme-payroll"}},
+	}
+	for _, c := range cases {
+		out := render(t, matchAll(t, c.id, scan.SurfaceFile, "notes.txt", c.line), nil, Style{})
+		for _, r := range append(c.raw, "tyamada") {
+			if strings.Contains(out, r) {
+				t.Errorf("%q printed raw for %q:\n%s", r, c.line, out)
+			}
+		}
+	}
+}
+
+func TestBlockedMasksWarnValuesToo(t *testing.T) {
+	all := matchAll(t, identity.Identity{Names: []string{"Taro Yamada"}}, scan.SurfaceStaged, "notes.md", "Taro Yamada built this in /Users/someone-else/src")
+	var high []scan.Finding
+	for _, f := range all {
+		if f.Severity == "high" {
+			high = append(high, f)
+		}
+	}
+	var b strings.Builder
+	if err := Blocked(&b, "this write", high, all, Style{}); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(b.String(), "someone-else") || strings.Contains(b.String(), "Taro") {
+		t.Errorf("hook message shows a value:\n%s", b.String())
+	}
+}
+
+func TestHomePathSpanIsTheLogin(t *testing.T) {
+	for line, want := range map[string]string{"cd /home/om/src": "om", "cd /Users/s1/x": "s1", "slug -Users-er-proj": "er"} {
+		fs := matchAll(t, identity.Identity{}, scan.SurfaceFile, "a", line)
+		if len(fs) != 1 || fs[0].Start != strings.LastIndex(line, want) || fs[0].Context[fs[0].Start:fs[0].End] != want {
+			t.Errorf("%q: span %+v", line, fs)
+		}
+	}
+}
+
+func TestPlaceSplitsHistoryAtTheLastAt(t *testing.T) {
+	where, note := place(scan.Finding{Surface: scan.SurfaceHistory, Location: "node_modules/@scope/pkg/index.js@abc1234", Line: 3})
+	if where != "node_modules/@scope/pkg/index.js:3" || !strings.Contains(note, "blob abc1234") {
+		t.Errorf("place: %q %q", where, note)
+	}
+}
+
+func TestPendingIdentityIsNotHistory(t *testing.T) {
+	f := scan.Finding{RuleID: "identity.email", Severity: "high", Surface: scan.SurfaceCommit, Location: "pending", Field: "author.email", Count: 1, Value: "taro@example.com", Redacted: rules.Redact("taro@example.com")}
+	out := renderMeta(t, []scan.Finding{f}, Meta{Target: "the next commit"}, Style{})
+	if strings.Contains(out, "history") || strings.Contains(out, "plan") || !strings.Contains(out, "noreply") {
+		t.Errorf("pending identity treated as history:\n%s", out)
+	}
+}
+
+func TestShortValuesDoNotEatWords(t *testing.T) {
+	fs := matchAll(t, identity.Identity{Logins: []string{"om"}}, scan.SurfaceFile, "a", "cd /Users/om/src # commit from home")
+	if len(fs) == 0 {
+		t.Fatal("no finding")
+	}
+	out := render(t, fs, nil, Style{})
+	if !strings.Contains(out, "# commit from home") || strings.Contains(out, "/Users/om/") {
+		t.Errorf("words around a short value were masked:\n%s", out)
+	}
+}
+
+func TestPlanHintNamesTheTarget(t *testing.T) {
+	fs := matchAll(t, identity.Identity{Names: []string{"Taro Yamada"}}, scan.SurfaceHistory, "a@abc", "by Taro Yamada")
+	if out := renderMeta(t, fs, Meta{Target: "../other"}, Style{}); !strings.Contains(out, "kwangmyong plan ../other") {
+		t.Errorf("hint should name the target:\n%s", out)
+	}
+}
+
+func TestCRLFLines(t *testing.T) {
+	fs := matchAll(t, identity.Identity{Names: []string{"Taro Yamada"}}, scan.SurfaceFile, "a", "by Taro Yamada\r")
+	out := render(t, fs, nil, Style{})
+	for _, l := range strings.Split(out, "\n") {
+		if strings.Contains(l, "│ by") && strings.HasSuffix(l, "·") {
+			t.Errorf("carriage return shown: %q", l)
+		}
+	}
+}
+
+func TestHeadersAreMasked(t *testing.T) {
+	fs := matchAll(t, identity.Identity{Logins: []string{"tyamada"}}, scan.SurfacePath, "docs/tyamada-notes.md", "docs/tyamada-notes.md")
+	if out := renderMeta(t, fs, Meta{Target: "/srv/tyamada/repo"}, Style{}); strings.Contains(out, "tyamada") {
+		t.Errorf("a header shows the value:\n%s", out)
 	}
 }

@@ -446,9 +446,14 @@ func cmdGitHub(args []string, stdout, stderr io.Writer) (int, error) {
 	var progress func(done, total int)
 	if st := ui.For(stderr); st.Color {
 		var mu sync.Mutex
+		shown := 0
 		progress = func(done, total int) {
 			mu.Lock()
 			defer mu.Unlock()
+			if done < shown { // a later repo's callback won the race
+				return
+			}
+			shown = done
 			fmt.Fprintf(stderr, "\r\x1b[K%s sweeping github.com/%s  %d/%d %s", st.Paint(ui.Red, "★"), fs.Arg(0), done, total, ui.Plural(total, "repo", "repos"))
 		}
 	}
@@ -597,7 +602,7 @@ func cmdHook(args []string, stdin io.Reader, stderr io.Writer) (int, error) {
 		return 2, err
 	}
 	if r.Block {
-		if err := report.Blocked(stderr, r.What, r.Findings, c.style(stderr, false)); err != nil {
+		if err := report.Blocked(stderr, r.What, r.Findings, r.All, c.style(stderr, false)); err != nil {
 			return 2, err
 		}
 		return blockCode, nil

@@ -36,7 +36,11 @@ func (s Style) withOthers(fs []scan.Finding) Style {
 			continue
 		}
 		s.redact[k] = f.Redacted
-		alts = append(alts, regexp.QuoteMeta(f.Value))
+		alt := regexp.QuoteMeta(f.Value)
+		if len([]rune(f.Value)) < 4 { // short values only as whole words, as the rules match them
+			alt = `\b` + alt + `\b`
+		}
+		alts = append(alts, alt)
 	}
 	if len(alts) == 0 {
 		return s
@@ -116,9 +120,14 @@ const (
 	fixFile    fix = iota // edit the file
 	fixHistory            // needs a history rewrite
 	fixRemote             // lives on GitHub or in a command
+	fixIdent              // the identity git will commit with
+	nFix
 )
 
 func fixOf(f scan.Finding) fix {
+	if f.Location == "pending" && f.Surface == scan.SurfaceCommit {
+		return fixIdent
+	}
 	switch f.Surface {
 	case scan.SurfaceFile, scan.SurfacePath, scan.SurfaceStaged:
 		return fixFile
@@ -166,9 +175,15 @@ func place(f scan.Finding) (where, note string) {
 	case scan.SurfacePath:
 		return f.Location, "in the file name"
 	case scan.SurfaceHistory:
-		p, blob, _ := strings.Cut(f.Location, "@")
+		p, blob := f.Location, ""
+		if i := strings.LastIndexByte(f.Location, '@'); i >= 0 {
+			p, blob = f.Location[:i], f.Location[i+1:]
+		}
 		return p + line, "deleted, but still in history (blob " + blob + ")"
 	case scan.SurfaceCommit, scan.SurfaceTag:
+		if f.Location == "pending" {
+			return "your git identity", "what the next commit will carry as " + f.Field
+		}
 		return f.Surface + " " + f.Location, f.Field
 	}
 	return f.Surface + " " + f.Location + line, f.Field
@@ -179,7 +194,7 @@ func place(f scan.Finding) (where, note string) {
 func Text(w io.Writer, fs []scan.Finding, meta Meta, s Style) error {
 	s = s.withOthers(fs)
 	var b strings.Builder
-	b.WriteString(Banner(s.Style, meta.Target))
+	b.WriteString(Banner(s.Style, s.scrub(meta.Target)))
 	gs := groups(fs)
 	gw := gutterWidth(gs)
 	for _, g := range gs {
@@ -194,8 +209,11 @@ func Text(w io.Writer, fs []scan.Finding, meta Meta, s Style) error {
 }
 
 // Blocked renders what a hook prints when it stops what.
-func Blocked(w io.Writer, what string, fs []scan.Finding, s Style) error {
-	s = s.withOthers(fs)
+// Only shown are framed; every value in all is masked wherever it appears.
+func Blocked(w io.Writer, what string, shown, all []scan.Finding, s Style) error {
+	s = s.withOthers(append(append([]scan.Finding{}, shown...), all...))
+	fs := shown
+	what = s.scrub(what)
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s %s\n\n", s.Paint(ui.Bold+ui.Red, "✗ TRANSMISSION BLOCKED."), s.Paint(ui.Bold, "kwangmyong stopped "+what+": it would hand out intel on you."))
 	gs := groups(fs)
@@ -223,6 +241,7 @@ func gutterWidth(gs []*group) int {
 
 func (s Style) frame(b *strings.Builder, g *group, gw int) {
 	where, note := place(g.head)
+	where = s.scrub(where)
 	b.WriteString(s.badge(g.head.Severity) + " " + s.Paint(ui.Bold, where))
 	if note != "" {
 		b.WriteString(s.Paint(ui.Dim, "  "+note))
@@ -351,6 +370,7 @@ func (s Style) dossier(b *strings.Builder, fs []scan.Finding) {
 		}
 		k.n += max(f.Count, 1)
 		if p, _ := place(f); !k.seen[p] {
+			p = s.scrub(p)
 			k.seen[p] = true
 			k.places = append(k.places, p)
 		}
@@ -409,7 +429,7 @@ func (s Style) verdict(b *strings.Builder, fs []scan.Finding, places int, meta M
 	case sum.High > 0:
 		color = ui.Red
 		total := 0
-		var byFix [3]int
+		var byFix [nFix]int
 		for _, f := range fs {
 			n := max(f.Count, 1)
 			total += n
@@ -429,11 +449,14 @@ func (s Style) verdict(b *strings.Builder, fs []scan.Finding, places int, meta M
 		if n := byFix[fixRemote]; n > 0 {
 			parts = append(parts, fmt.Sprintf("%d already out on GitHub", n))
 		}
+		if n := byFix[fixIdent]; n > 0 {
+			parts = append(parts, fmt.Sprintf("%d in the identity you commit with", n))
+		}
 		if sum.Warn > 0 {
 			parts = append(parts, fmt.Sprintf("%d suspicious", sum.Warn))
 		}
 		lines = append(lines, "  "+strings.Join(parts, " · "), "  "+s.threat(fs))
-		next = hint(byFix)
+		next = hint(byFix, meta.Target)
 	case sum.Warn > 0:
 		color = ui.Yellow
 		lines = append(lines,
@@ -497,10 +520,15 @@ func readLine(st *scan.Stats) string {
 	return strings.Join(parts, " · ")
 }
 
-func hint(byFix [3]int) string {
+func hint(byFix [nFix]int, target string) string {
+	if target == "" || target == "the next commit" {
+		target = "."
+	}
 	switch {
+	case byFix[fixIdent] > 0:
+		return "commit as your GitHub noreply address and a public handle"
 	case byFix[fixHistory] > 0:
-		return "kwangmyong plan .  drafts the history rewrite for you to review"
+		return "kwangmyong plan " + target + "  drafts the history rewrite for you to review"
 	case byFix[fixFile] > 0:
 		return "fix the lines above · kwangmyong hook pre-commit guards the next one"
 	case byFix[fixRemote] > 0:
