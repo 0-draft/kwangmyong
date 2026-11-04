@@ -13,6 +13,12 @@ git リポジトリの中からあなたを探します。名前、ログイン�
 ## インストール
 
 ```sh
+brew install --cask kanywst/tap/kwangmyong
+```
+
+Go からなら:
+
+```sh
 go install github.com/kanywst/kwangmyong/cmd/kwangmyong@latest
 ```
 
