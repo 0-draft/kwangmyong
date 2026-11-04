@@ -13,6 +13,12 @@ Coding agents write what they see, and what they see is your machine: `/Users/yo
 ## Install
 
 ```sh
+brew install --cask kanywst/tap/kwangmyong
+```
+
+Or with Go:
+
+```sh
 go install github.com/kanywst/kwangmyong/cmd/kwangmyong@latest
 ```
 
