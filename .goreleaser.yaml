@@ -28,5 +28,16 @@ archives:
 checksum:
   name_template: checksums.txt
 
+sboms:
+  - artifacts: archive
+
+# cosign 3.x writes one Sigstore bundle (signature + certificate) per artifact.
+signs:
+  - cmd: cosign
+    signature: "${artifact}.sigstore.json"
+    args: ["sign-blob", "--bundle=${signature}", "${artifact}", "--yes"]
+    artifacts: checksum
+    output: true
+
 changelog:
   use: github-native
