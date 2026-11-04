@@ -1,3 +1,5 @@
+<img src="docs/logo.png" width="160" alt="kwangmyong: 虫眼鏡で身分証をのぞき込む泥棒">
+
 # kwangmyong
 
 [English](README.md) | 日本語
