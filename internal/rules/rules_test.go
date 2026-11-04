@@ -33,6 +33,18 @@ func TestGenericHomePath(t *testing.T) {
 	}
 }
 
+func TestAgentSessionURL(t *testing.T) {
+	m := matcher(t, identity.Identity{})
+	got := ids(m.Find("see https://claude.ai/code/session_011CUabc and https://chatgpt.com/codex/tasks/task_e_68ab12, not https://claude.ai/code or https://claude.ai/code/sessions"))
+	want := []string{
+		"generic.agent-session-url=https://claude.ai/code/session_011CUabc",
+		"generic.agent-session-url=https://chatgpt.com/codex/tasks/task_e_68ab12",
+	}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("got %v want %v", got, want)
+	}
+}
+
 func TestIdentityBeatsGeneric(t *testing.T) {
 	m := matcher(t, identity.Identity{Logins: []string{"tyamada"}})
 	got := m.Find("/Users/tyamada/src")

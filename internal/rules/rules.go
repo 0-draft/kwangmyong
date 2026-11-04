@@ -109,6 +109,13 @@ func generic() []Rule {
 			re:       regexp.MustCompile(`(?:/Users/|/home/|[A-Za-z]:(?:\\\\|\\|/)Users(?:\\\\|\\|/))([A-Za-z0-9][A-Za-z0-9._-]*)|-Users-([A-Za-z0-9][A-Za-z0-9._]*)-`),
 			skip:     identity.IsPlaceholderLogin,
 		},
+		{
+			// Coding agents link their session from commits and PR bodies.
+			ID:       "generic.agent-session-url",
+			Severity: Warn,
+			re:       regexp.MustCompile(`https?://(?:claude\.ai/code/(session_[A-Za-z0-9]+)|chatgpt\.com/codex/tasks/(task_[A-Za-z0-9_]+))`),
+			whole:    true,
+		},
 	}
 }
 
